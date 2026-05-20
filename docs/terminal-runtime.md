@@ -141,7 +141,7 @@ Build or refresh the asset with:
 Current generated artifact:
 
 - Size: 3.4 MiB
-- SHA-256: `af6584538b34146e0048fc1c0b22d632d08b271ef5c306a4bc57a66eb03f201c`
+- SHA-256: `dcb6c73f061bc15fc992aabdacc3798295ab87e8929a050850177afd76c0996a`
 
 The profile documents `/bin/sh` (BusyBox ash) as the default shell and includes Alpine `apk` from the minirootfs. Because this is a compact initramfs rather than a full workstation disk image, `bash`, `curl`, and CA certificates are installed through `apk` after the VM has network egress:
 
@@ -151,7 +151,7 @@ apk update
 apk add bash curl ca-certificates
 ```
 
-If `linux alpine` reports a missing initramfs asset, run the build script above. If `apk update` cannot reach mirrors, the VM booted correctly but v86 networking still needs a prepared network path or a fuller Alpine/Debian disk image.
+If `linux alpine` reports a missing initramfs asset, run the build script above. If `apk update` cannot reach mirrors, the VM booted correctly but v86 networking still needs a prepared DHCP/relay path or a fuller Alpine/Debian disk image with preinstalled packages.
 
 ## Verification
 
@@ -171,3 +171,5 @@ Verified on 2026-05-21:
 
 - `./scripts/build-alpine-initramfs.sh` downloaded the official Alpine minirootfs and generated `public/v86/alpine-initramfs.cpio.gz`.
 - `linux help` documents the Buildroot and Alpine profiles separately.
+- Chrome DevTools MCP confirmed `linux alpine` boots to `/ #`, reports Alpine `3.23.0`, and exposes `/sbin/apk`.
+- Chrome DevTools MCP confirmed `eth0` is brought `UP`; DHCP still broadcasts without receiving a lease in the current local v86 setup, so mirror-backed `apk add` remains the open networking/disk-image part of VORTEX-126.
