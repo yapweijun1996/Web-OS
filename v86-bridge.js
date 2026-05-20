@@ -8,14 +8,20 @@ class V86LinuxBridge {
   constructor(config = {}) {
     this.workerScript = config.workerScript || 'v86-worker.js';
 
-    // Runtime resources handed to the worker. These binaries are not bundled
-    // in the repository - override the URLs to point at real v86 assets.
+    // Runtime resources handed to the worker. Keep defaults same-origin so
+    // browser VM boot is not affected by remote hotlink or CORS failures.
     this.resources = {
-      libUrl: config.libUrl || 'libv86.js',
-      wasmPath: config.wasmPath || 'v86.wasm',
-      biosUrl: config.biosUrl || 'seabios.bin',
-      vgaBiosUrl: config.vgaBiosUrl || 'vgabios.bin',
-      imageUrl: config.imageUrl || 'alpine.img'
+      libUrl: config.libUrl || '/v86/libv86.js',
+      wasmPath: config.wasmPath || '/v86/v86.wasm',
+      biosUrl: config.biosUrl || '/v86/seabios.bin',
+      vgaBiosUrl: config.vgaBiosUrl || '/v86/vgabios.bin',
+      bzimageUrl: config.bzimageUrl || '/v86/buildroot-bzimage68.bin',
+      initrdUrl: config.initrdUrl || null,
+      cdromUrl: config.cdromUrl || null,
+      hdaUrl: config.hdaUrl || null,
+      cmdline: config.cmdline || 'console=ttyS0 earlyprintk=serial,ttyS0 root=/dev/ram0 rw',
+      memorySize: config.memorySize || 128 * 1024 * 1024,
+      vgaMemorySize: config.vgaMemorySize || 8 * 1024 * 1024
     };
 
     this.worker = null;
@@ -52,6 +58,9 @@ class V86LinuxBridge {
           this._setStatus('error');
           console.error('[V86LinuxBridge] Linux VM boot failed:', data);
           this.broadcastToTerminals(`\r\n[Vortex OS] Linux VM unavailable: ${data}\r\n`);
+          break;
+        case 'BOOT_PROGRESS':
+          this.broadcastToTerminals(data);
           break;
       }
     };

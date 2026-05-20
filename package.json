@@ -12,7 +12,10 @@
     "vite": "^5.2.11"
   },
   "dependencies": {
+    "@webcontainer/api": "^1.6.4",
     "@xterm/addon-fit": "^0.11.0",
-    "@xterm/xterm": "^6.0.0"
+    "@xterm/xterm": "^6.0.0",
+    "pyodide": "^0.29.4",
+    "v86": "^0.5.359"
   }
 }

@@ -10,15 +10,22 @@
 //   wasmPath    - v86 WebAssembly binary (v86.wasm)
 //   biosUrl     - SeaBIOS image
 //   vgaBiosUrl  - VGA BIOS image
-//   imageUrl    - bootable disk image (e.g. Alpine Linux)
+//   bzimageUrl  - Linux kernel image for direct kernel boot
+//   initrdUrl   - optional initramfs image
+//   cdromUrl    - optional ISO image
+//   hdaUrl      - optional bootable disk image (e.g. Alpine Linux)
 //
-// These binaries are NOT bundled in the repository. When any is missing the
+// Default runtime binaries live under /public/v86. When any is missing the
 // worker reports a clear BOOT_ERROR rather than failing silently.
 
 let emulator = null;
 
 function reportError(message) {
   self.postMessage({ type: 'BOOT_ERROR', data: message });
+}
+
+function reportProgress(message) {
+  self.postMessage({ type: 'BOOT_PROGRESS', data: message });
 }
 
 function bootEmulator(resources) {
@@ -45,16 +52,26 @@ function bootEmulator(resources) {
   }
 
   try {
-    emulator = new V86Class({
+    const options = {
       wasm_path: resources.wasmPath,
       bios: { url: resources.biosUrl },
       vga_bios: { url: resources.vgaBiosUrl },
-      hda: { url: resources.imageUrl },
+      memory_size: resources.memorySize,
+      vga_memory_size: resources.vgaMemorySize,
+      cmdline: resources.cmdline,
       autostart: true,
       disable_keyboard: true,
       disable_mouse: true,
       uart0: true
-    });
+    };
+
+    if (resources.bzimageUrl) options.bzimage = { url: resources.bzimageUrl };
+    if (resources.initrdUrl) options.initrd = { url: resources.initrdUrl };
+    if (resources.cdromUrl) options.cdrom = { url: resources.cdromUrl, async: true };
+    if (resources.hdaUrl) options.hda = { url: resources.hdaUrl, async: true };
+
+    reportProgress('[Vortex OS] Starting v86 real-kernel Linux...\r\n');
+    emulator = new V86Class(options);
   } catch (err) {
     emulator = null;
     reportError(`Failed to construct the v86 emulator: ${err.message}`);
@@ -71,6 +88,13 @@ function bootEmulator(resources) {
   emulator.add_listener('download-error', (detail) => {
     const file = detail && detail.file_name ? detail.file_name : 'unknown resource';
     reportError(`Failed to download VM resource "${file}".`);
+  });
+
+  emulator.add_listener('download-progress', (detail) => {
+    if (!detail || !detail.file_name || !detail.total) return;
+    const done = Math.round((detail.loaded / detail.total) * 100);
+    reportProgress(`\r[Vortex OS] Loading ${detail.file_name}: ${done}%`);
+    if (done >= 100) reportProgress('\r\n');
   });
 
   emulator.add_listener('emulator-ready', () => {

@@ -15,6 +15,13 @@ class CompressedStorageEngine {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.version);
 
+      request.onblocked = () => {
+        console.warn(`[VFS] Database '${this.dbName}' connection blocked by another active tab!`);
+        if (window.parent && window.parent.vortexKernel) {
+          window.parent.vortexKernel.bus.emit('vfs:blocked', { dbName: this.dbName });
+        }
+      };
+
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
         if (!db.objectStoreNames.contains('files')) {
@@ -24,6 +31,16 @@ class CompressedStorageEngine {
 
       request.onsuccess = (event) => {
         this.db = event.target.result;
+
+        this.db.onversionchange = () => {
+          console.warn(`[VFS] Database '${this.dbName}' is upgrading in another tab. Closing connection immediately.`);
+          this.db.close();
+          this.db = null;
+          if (window.parent && window.parent.vortexKernel) {
+            window.parent.vortexKernel.bus.emit('vfs:offline', { dbName: this.dbName });
+          }
+        };
+
         resolve();
       };
 
@@ -129,6 +146,22 @@ class CompressedStorageEngine {
         return null;
       }
     }).filter(v => v !== null);
+  }
+
+  async listFiles(prefix = '/') {
+    const normalizedPrefix = prefix || '/';
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction(['files'], 'readonly');
+      const request = transaction.objectStore('files').getAllKeys();
+
+      request.onsuccess = () => {
+        const keys = request.result
+          .filter((key) => typeof key === 'string' && key.startsWith(normalizedPrefix))
+          .sort();
+        resolve(keys);
+      };
+      request.onerror = () => reject(request.error);
+    });
   }
 
   async compressString(str) {

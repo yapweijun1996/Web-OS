@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <title>Terminal</title>
   <style>
     html, body { margin: 0; height: 100%; background: #1e1e2e; }
@@ -19,58 +20,579 @@
 
   <!--
     VORTEX-106: Terminal plugin.
-    A real xterm.js terminal emulator wired to the v86 WebAssembly Linux VM
-    through V86LinuxBridge. The terminal UI and the bridge communicate over a
-    MessageChannel: keystrokes travel out as STDIN, serial output comes back
-    as STDOUT. When the v86 binaries are absent the bridge reports a BOOT_ERROR
-    which is rendered inline, so the terminal degrades gracefully.
+    A real xterm.js terminal emulator with a built-in Vortex shell. The optional
+    v86 Linux bridge is started only when the user asks for it, so missing VM
+    binaries no longer leave the terminal unusable.
   -->
   <script type="module">
     import { Terminal } from '@xterm/xterm';
     import { FitAddon } from '@xterm/addon-fit';
     import '@xterm/xterm/css/xterm.css';
+    import { WebContainer } from '@webcontainer/api';
+    import { CompressedStorageEngine } from './jsonl-storage-engine.js';
     import { V86LinuxBridge } from './v86-bridge.js';
 
-    // --- Terminal emulator UI ---
-    const term = new Terminal({
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      fontSize: 13,
-      cursorBlink: true,
-      convertEol: true,
-      theme: { background: '#1e1e2e', foreground: '#cdd6f4', cursor: '#cba6f7' }
-    });
-    const fitAddon = new FitAddon();
-    term.loadAddon(fitAddon);
-    term.open(document.getElementById('term'));
-    fitAddon.fit();
-    window.addEventListener('resize', () => fitAddon.fit());
+    const PYODIDE_MODULE_URL = 'https://cdn.jsdelivr.net/pyodide/v0.29.4/full/pyodide.mjs';
+    const PYODIDE_INDEX_URL = 'https://cdn.jsdelivr.net/pyodide/v0.29.4/full/';
+    const NPM_GLOBAL_PREFIX = '/home/.npm-global';
+    const NPM_CACHE_DIR = '/home/.npm';
+    let loadPyodideModule = null;
 
-    term.writeln('Vortex OS Terminal — v86 WebAssembly Linux bridge');
-    term.writeln('Booting Linux VM worker...');
-    term.writeln('');
+    async function main() {
+      // --- Terminal emulator UI ---
+      const term = new Terminal({
+        fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+        fontSize: 13,
+        cursorBlink: true,
+        convertEol: true,
+        theme: { background: '#1e1e2e', foreground: '#cdd6f4', cursor: '#cba6f7' }
+      });
+      const fitAddon = new FitAddon();
+      term.loadAddon(fitAddon);
+      term.open(document.getElementById('term'));
+      fitAddon.fit();
+      window.addEventListener('resize', () => {
+        fitAddon.fit();
+        if (runningProcess) {
+          runningProcess.resize({ cols: term.cols, rows: term.rows });
+        }
+      });
 
-    // --- Wire the terminal to V86LinuxBridge over a MessageChannel ---
-    // The bridge owns port1 (listens for STDIN, emits STDOUT); the terminal
-    // owns port2 (emits STDIN, renders STDOUT).
-    const bridge = new V86LinuxBridge();
-    const channel = new MessageChannel();
+      const storage = new CompressedStorageEngine();
+      await storage.init();
 
-    // Register the terminal port BEFORE init() so an early BOOT_ERROR broadcast
-    // still reaches this terminal.
-    bridge.registerTerminalPort('terminal-main', channel.port1);
+      let mode = 'shell';
+      let cwd = '/';
+      let input = '';
+      let bridge = null;
+      let linuxPort = null;
+      let webcontainer = null;
+      let pyodide = null;
+      let runningProcess = null;
+      let processInput = null;
+      const runtimeFiles = new Map();
+      const prompt = () => `vortex:${cwd} $ `;
 
-    channel.port2.onmessage = (event) => {
-      if (event.data && event.data.action === 'STDOUT') {
-        term.write(event.data.data);
+      term.writeln('Vortex OS Terminal');
+      term.writeln('Node/npm run in WebContainer. Python/pip run in Pyodide. Type "help".');
+      term.writeln('Type "linux" to start the optional v86 real-kernel VM when assets are installed.');
+      term.writeln('');
+      writePrompt();
+
+      function writePrompt() {
+        term.write(prompt());
       }
-    };
 
-    // Keystrokes -> STDIN -> bridge -> worker -> v86 serial port.
-    term.onData((data) => {
-      channel.port2.postMessage({ action: 'STDIN', data });
+      function parseArgs(line) {
+        const args = [];
+        const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
+        let match;
+        while ((match = re.exec(line))) {
+          args.push(match[1] ?? match[2] ?? match[3]);
+        }
+        return args;
+      }
+
+      function resolvePath(path = cwd) {
+        if (!path || path === '.') return cwd;
+        const raw = path.startsWith('/') ? path : `${cwd.replace(/\/$/, '')}/${path}`;
+        const parts = [];
+        for (const part of raw.split('/')) {
+          if (!part || part === '.') continue;
+          if (part === '..') parts.pop();
+          else parts.push(part);
+        }
+        return '/' + parts.join('/');
+      }
+
+      function normalizeRuntimePath(path) {
+        return resolvePath(path).replace(/^\/+/, '') || 'index.js';
+      }
+
+      function dirname(path) {
+        const i = path.lastIndexOf('/');
+        return i === -1 ? '' : path.slice(0, i);
+      }
+
+      async function pathExists(path) {
+        const files = await storage.listFiles(path);
+        return files.includes(path) || files.some((file) => file.startsWith(path.replace(/\/$/, '') + '/'));
+      }
+
+      async function getWebContainer() {
+        if (webcontainer) return webcontainer;
+        if (!window.crossOriginIsolated) {
+          term.writeln('WebContainer needs cross-origin isolation. Restart Vite so COOP/COEP headers from vite.config.js apply.');
+        }
+        term.writeln('Booting WebContainer Node.js runtime...');
+        webcontainer = await WebContainer.boot({ coep: 'credentialless', workdirName: 'vortex' });
+        await webcontainer.mount({
+          'package.json': {
+            file: {
+              contents: JSON.stringify({
+                type: 'module',
+                scripts: { start: 'node index.js' },
+                dependencies: {}
+              }, null, 2)
+            }
+          },
+          'index.js': {
+            file: { contents: 'console.log("Hello from Vortex OS Node.js", process.version);\n' }
+          }
+        });
+        runtimeFiles.set('index.js', 'console.log("Hello from Vortex OS Node.js", process.version);\n');
+        term.writeln('Node.js runtime ready.');
+        return webcontainer;
+      }
+
+      async function ensureNpmWritableGlobalPrefix(wc) {
+        await wc.fs.mkdir(`${NPM_GLOBAL_PREFIX}/bin`, { recursive: true });
+        await wc.fs.mkdir(NPM_CACHE_DIR, { recursive: true });
+      }
+
+      function hasGlobalNpmFlag(args) {
+        return args.includes('-g') || args.includes('--global');
+      }
+
+      function hasNpmPrefixArg(args) {
+        return args.includes('--prefix') || args.some((arg) => arg.startsWith('--prefix='));
+      }
+
+      function normalizeWebContainerCommand(command, args) {
+        if (command !== 'npm' || !hasGlobalNpmFlag(args) || hasNpmPrefixArg(args)) {
+          return { args, usedWritablePrefix: false };
+        }
+        return {
+          args: [...args, '--prefix', NPM_GLOBAL_PREFIX],
+          usedWritablePrefix: true
+        };
+      }
+
+      function isSafeExecutableName(command) {
+        return /^[a-zA-Z0-9._-]+$/.test(command);
+      }
+
+      async function getInstalledGlobalBin(command) {
+        if (!webcontainer || !isSafeExecutableName(command)) return '';
+        const binPath = `${NPM_GLOBAL_PREFIX}/bin/${command}`;
+        try {
+          const entries = await webcontainer.fs.readdir(`${NPM_GLOBAL_PREFIX}/bin`);
+          if (entries.some((entry) => (typeof entry === 'string' ? entry : entry.name) === command)) {
+            return binPath;
+          }
+          await webcontainer.fs.stat(binPath);
+          return binPath;
+        } catch {
+          return '';
+        }
+      }
+
+      async function runGlobalWebContainerCommand(command, args) {
+        if (!webcontainer || !isSafeExecutableName(command)) return false;
+        const candidates = [`${NPM_GLOBAL_PREFIX}/bin/${command}`, command];
+        for (const candidate of candidates) {
+          try {
+            await runWebContainerCommand(candidate, args);
+            return true;
+          } catch {
+            // Try the next candidate before falling back to shell-level not found.
+          }
+        }
+        return false;
+      }
+
+      async function getLoadPyodide() {
+        if (!loadPyodideModule) {
+          ({ loadPyodide: loadPyodideModule } = await import(/* @vite-ignore */ PYODIDE_MODULE_URL));
+        }
+        return loadPyodideModule;
+      }
+
+      async function getPyodide() {
+        if (pyodide) return pyodide;
+        term.writeln('Booting Pyodide Python runtime...');
+        const loadPyodide = await getLoadPyodide();
+        pyodide = await loadPyodide({
+          indexURL: PYODIDE_INDEX_URL,
+          stdout: (text) => term.writeln(text),
+          stderr: (text) => term.writeln(text)
+        });
+        pyodide.setStdout({ batched: (text) => term.writeln(text) });
+        pyodide.setStderr({ batched: (text) => term.writeln(text) });
+        await pyodide.loadPackage('micropip');
+        for (const [path, contents] of runtimeFiles) {
+          writePyodideFile(path, contents);
+        }
+        term.writeln(`Python ${pyodide.runPython('import sys; sys.version.split()[0]')} runtime ready.`);
+        return pyodide;
+      }
+
+      async function writeWebContainerFile(path, contents) {
+        const wc = await getWebContainer();
+        const dir = dirname(path);
+        if (dir) await wc.fs.mkdir(dir, { recursive: true });
+        await wc.fs.writeFile(path, contents);
+      }
+
+      function writePyodideFile(path, contents) {
+        if (!pyodide) return;
+        const pyDir = '/' + dirname(path);
+        if (pyDir !== '/') {
+          pyodide.FS.mkdirTree(pyDir);
+        }
+        pyodide.FS.writeFile('/' + path, contents);
+      }
+
+      async function saveRuntimeFile(pathArg, contents) {
+        const path = normalizeRuntimePath(pathArg);
+        runtimeFiles.set(path, contents);
+        if (webcontainer) await writeWebContainerFile(path, contents);
+        writePyodideFile(path, contents);
+        term.writeln(`saved ${path}`);
+      }
+
+      async function pipeProcessOutput(process) {
+        const reader = process.output.getReader();
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            term.write(value);
+          }
+        } finally {
+          reader.releaseLock();
+        }
+      }
+
+      async function runWebContainerCommand(command, args) {
+        const wc = await getWebContainer();
+        await ensureNpmWritableGlobalPrefix(wc);
+        const normalized = normalizeWebContainerCommand(command, args);
+        if (normalized.usedWritablePrefix) {
+          term.writeln(`Using writable npm global prefix: ${NPM_GLOBAL_PREFIX}`);
+        }
+        const process = await wc.spawn(command, normalized.args, {
+          terminal: { cols: term.cols, rows: term.rows },
+          env: {
+            HOME: '/home',
+            PATH: `${NPM_GLOBAL_PREFIX}/bin:/usr/local/bin:/usr/bin:/bin`,
+            npm_config_cache: NPM_CACHE_DIR,
+            npm_config_prefix: NPM_GLOBAL_PREFIX,
+            NPM_CONFIG_PREFIX: NPM_GLOBAL_PREFIX
+          }
+        });
+        runningProcess = process;
+        processInput = process.input.getWriter();
+        mode = 'process';
+        const outputDone = pipeProcessOutput(process);
+        const exitCode = await process.exit;
+        await outputDone;
+        processInput.releaseLock();
+        processInput = null;
+        runningProcess = null;
+        mode = 'shell';
+        if (exitCode !== 0) {
+          term.writeln(`Process exited with code ${exitCode}`);
+        }
+      }
+
+      async function runPythonCommand(args) {
+        const py = await getPyodide();
+        if (!args.length || args[0] === '-V' || args[0] === '--version') {
+          term.writeln(`Python ${py.runPython('import sys; sys.version.split()[0]')}`);
+          return;
+        }
+        if (args[0] === '-c') {
+          const code = args.slice(1).join(' ');
+          if (!code) {
+            term.writeln('python: missing code after -c');
+            return;
+          }
+          await py.runPythonAsync(code);
+          return;
+        }
+
+        const filePath = normalizeRuntimePath(args[0]);
+        const code = runtimeFiles.get(filePath);
+        if (!code) {
+          term.writeln(`python: cannot open ${filePath}. Use: write ${filePath} "print('hello')"`);
+          return;
+        }
+        await py.runPythonAsync(code);
+      }
+
+      async function runPipCommand(args) {
+        const packages = args.filter((arg) => arg !== 'install');
+        if (!args.length || args[0] !== 'install' || !packages.length) {
+          term.writeln('pip: usage: pip install <pure-python-package>');
+          return;
+        }
+        const py = await getPyodide();
+        py.globals.set('_vortex_packages', packages);
+        await py.runPythonAsync('import micropip\\nawait micropip.install(list(_vortex_packages))');
+        term.writeln(`installed ${packages.join(', ')}`);
+      }
+
+      async function runCommand(line) {
+        const args = parseArgs(line);
+        const command = args.shift();
+        if (!command) return;
+
+        switch (command) {
+          case 'help':
+            term.writeln('Commands: help, clear, date, pwd, cd, ls, cat, append, echo, write, whoami, uname, storage');
+            term.writeln('Node: node -v | node index.js | npm -v | npm install <pkg> | npm i -g <pkg> | <global-bin>');
+            term.writeln('Python: python -V | python -c "print(123)" | write hello.py "print(123)" | python hello.py | pip install <pkg>');
+            term.writeln('VM: linux starts optional v86 real-kernel mode after libv86.js/v86.wasm/BIOS/image assets are installed.');
+            break;
+
+          case 'clear':
+            term.clear();
+            break;
+
+          case 'date':
+            term.writeln(new Date().toString());
+            break;
+
+          case 'pwd':
+            term.writeln(cwd);
+            break;
+
+          case 'cd': {
+            const next = resolvePath(args[0] || '/');
+            if (next !== '/' && !(await pathExists(next))) {
+              term.writeln(`cd: no such VFS path: ${next}`);
+              break;
+            }
+            cwd = next;
+            break;
+          }
+
+          case 'ls': {
+            const path = resolvePath(args[0] || cwd);
+            const files = await storage.listFiles(path === '/' ? '/' : path.replace(/\/$/, ''));
+            if (!files.length) {
+              term.writeln('(empty)');
+              break;
+            }
+            files.forEach((file) => term.writeln(file));
+            break;
+          }
+
+          case 'cat': {
+            const fileArg = args[0];
+            if (!fileArg) {
+              term.writeln('cat: missing file path');
+              break;
+            }
+            const runtimePath = normalizeRuntimePath(fileArg);
+            if (runtimeFiles.has(runtimePath)) {
+              term.writeln(runtimeFiles.get(runtimePath));
+              break;
+            }
+            const path = resolvePath(fileArg);
+            const records = await storage.readGzFileLines(path);
+            if (!records.length) {
+              term.writeln('(empty or missing file)');
+              break;
+            }
+            records.forEach((record) => term.writeln(JSON.stringify(record)));
+            break;
+          }
+
+          case 'append': {
+            const path = resolvePath(args.shift());
+            const text = args.join(' ');
+            if (!path || !text) {
+              term.writeln('append: usage: append <path> <text>');
+              break;
+            }
+            await storage.appendToGzFile(path, JSON.stringify({ ts: new Date().toISOString(), text }));
+            term.writeln(`appended 1 record to ${path}`);
+            break;
+          }
+
+          case 'write': {
+            const path = args.shift();
+            const contents = args.join(' ');
+            if (!path || !contents) {
+              term.writeln('write: usage: write <file> <content>');
+              break;
+            }
+            await saveRuntimeFile(path, contents + '\n');
+            break;
+          }
+
+          case 'echo':
+            term.writeln(args.join(' '));
+            break;
+
+          case 'whoami':
+            term.writeln('vortex-user');
+            break;
+
+          case 'uname':
+            term.writeln('Vortex OS browser-runtime shell');
+            break;
+
+          case 'storage': {
+            if (!navigator.storage?.estimate) {
+              term.writeln('Storage estimate is not available in this browser.');
+              break;
+            }
+            const estimate = await navigator.storage.estimate();
+            const used = Math.round((estimate.usage || 0) / 1024);
+            const quota = Math.round((estimate.quota || 0) / 1024);
+            term.writeln(`IndexedDB origin storage: ${used} KiB used / ${quota} KiB quota`);
+            break;
+          }
+
+          case 'node':
+          case 'npm':
+          case 'npx':
+            await runWebContainerCommand(command, args);
+            break;
+
+          case 'python':
+          case 'python3':
+            await runPythonCommand(args);
+            break;
+
+          case 'pip':
+          case 'pip3':
+            await runPipCommand(args);
+            break;
+
+          case 'apt':
+          case 'apt-get':
+            term.writeln('apt is not available in WebContainer/Pyodide mode.');
+            term.writeln('Use npm install <pkg> for Node packages, pip install <pkg> for Pyodide-compatible Python packages, or linux after v86 assets are installed.');
+            break;
+
+          case 'linux':
+          case 'vm':
+            await startLinuxMode();
+            break;
+
+          case 'jslinux':
+            term.writeln('JSLinux is an external hosted VM. For Vortex OS, the in-app real-kernel path is v86 via the linux command.');
+            term.writeln('Source: https://bellard.org/jslinux/');
+            break;
+
+          default:
+            {
+              const ranGlobalCommand = await runGlobalWebContainerCommand(command, args);
+              if (!ranGlobalCommand) {
+                term.writeln(`${command}: command not found`);
+              }
+            }
+        }
+      }
+
+      async function startLinuxMode() {
+        if (mode === 'linux') return;
+        const libAvailable = await fetch('/v86/libv86.js', { method: 'HEAD' })
+          .then((res) => res.ok)
+          .catch(() => false);
+        if (!libAvailable) {
+          term.writeln('Linux VM runtime assets are not installed: missing /v86/libv86.js.');
+          term.writeln('Run npm install and ensure public/v86 contains libv86.js, v86.wasm, and v86-fallback.wasm.');
+          return;
+        }
+
+        term.writeln('Starting v86 real-kernel Linux VM...');
+        term.writeln('Default image: official v86 Buildroot Linux. Alpine/apk mode needs a prepared Alpine disk image URL.');
+        mode = 'linux';
+        const channel = new MessageChannel();
+        linuxPort = channel.port2;
+        bridge = new V86LinuxBridge({
+          onStatusChange(status) {
+            if (status === 'error') {
+              mode = 'shell';
+              term.writeln('');
+              term.writeln('Returning to Vortex shell.');
+              writePrompt();
+            }
+          }
+        });
+
+        bridge.registerTerminalPort('terminal-main', channel.port1);
+        linuxPort.onmessage = (event) => {
+          if (event.data && event.data.action === 'STDOUT') {
+            term.write(event.data.data);
+          }
+        };
+        bridge.init();
+      }
+
+      async function handleShellData(data) {
+        for (const char of data) {
+          if (char === '\r') {
+            term.write('\r\n');
+            const line = input;
+            input = '';
+            try {
+              await runCommand(line.trim());
+            } catch (err) {
+              term.writeln(`Error: ${err.message}`);
+            }
+            if (mode === 'shell') writePrompt();
+          } else if (char === '\u007f') {
+            if (input.length > 0) {
+              input = input.slice(0, -1);
+              term.write('\b \b');
+            }
+          } else if (char === '\u0003') {
+            input = '';
+            term.write('^C\r\n');
+            writePrompt();
+          } else if (char >= ' ' && char !== '\u007f') {
+            input += char;
+            term.write(char);
+          }
+        }
+      }
+
+      term.onData((data) => {
+        if (mode === 'linux' && linuxPort) {
+          linuxPort.postMessage({ action: 'STDIN', data });
+        } else if (mode === 'process' && processInput) {
+          if (data === '\u0003' && runningProcess) {
+            runningProcess.kill();
+          } else {
+            processInput.write(data);
+          }
+        } else {
+          handleShellData(data);
+        }
+      });
+
+      window.vortexTerminal = {
+        run: (line) => {
+          if (mode === 'linux' && linuxPort) {
+            linuxPort.postMessage({ action: 'STDIN', data: `${line}\r` });
+            return Promise.resolve();
+          }
+          return runCommand(line);
+        },
+        send: (data) => {
+          if (mode === 'linux' && linuxPort) {
+            linuxPort.postMessage({ action: 'STDIN', data });
+          }
+        },
+        getInstalledGlobalBin,
+        normalizeWebContainerCommand,
+        get mode() { return mode; },
+        get linuxStatus() { return bridge?.status || null; },
+        get webcontainerReady() { return !!webcontainer; },
+        get pyodideReady() { return !!pyodide; }
+      };
+    }
+
+    main().catch((err) => {
+      console.error('[Terminal] Failed to initialize:', err);
+      document.getElementById('term').textContent = `Terminal failed to initialize: ${err.message}`;
     });
-
-    bridge.init();
   </script>
 </body>
 </html>
