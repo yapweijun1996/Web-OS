@@ -14,6 +14,8 @@
 //   initrdUrl   - optional initramfs image
 //   cdromUrl    - optional ISO image
 //   hdaUrl      - optional bootable disk image (e.g. Alpine Linux)
+//   networkRelayUrl - optional v86 network relay mode, e.g. "fetch"
+//   netDevice   - optional v86 net_device config
 //
 // Default runtime binaries live under /public/v86. When any is missing the
 // worker reports a clear BOOT_ERROR rather than failing silently.
@@ -69,6 +71,8 @@ function bootEmulator(resources) {
     if (resources.initrdUrl) options.initrd = { url: resources.initrdUrl };
     if (resources.cdromUrl) options.cdrom = { url: resources.cdromUrl, async: true };
     if (resources.hdaUrl) options.hda = { url: resources.hdaUrl, async: true };
+    if (resources.networkRelayUrl) options.network_relay_url = resources.networkRelayUrl;
+    if (resources.netDevice) options.net_device = resources.netDevice;
 
     reportProgress('[Vortex OS] Starting v86 real-kernel Linux...\r\n');
     emulator = new V86Class(options);

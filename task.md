@@ -246,19 +246,29 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
 * **Summary**: Add Prepared Alpine or Debian v86 Disk Image
 * **Issue Type**: Story
 * **Priority**: High
-* **Status**: In Progress
-* **Description**: Provide a real package-install Linux environment for v86 with a documented shell, package manager, and a path to install `bash`, HTTPS-capable `curl`, and CA certificates. The current default Buildroot image remains suitable for kernel boot validation only.
+* **Status**: Done
+* **Description**: Provide a real package-install Linux environment for v86 with `bash`, HTTPS-capable `curl`, CA certificates, and `apk`. The current default Buildroot image remains suitable for kernel boot validation only.
 * **Acceptance Criteria**:
-  - `linux alpine` boots an Alpine initramfs with documented `/bin/sh` and `apk` package-manager support.
+  - `linux alpine` boots an Alpine initramfs with `bash`, HTTPS-capable `curl`, CA certificates, and `apk`.
   - The image source, build process, checksum, and size are documented.
   - Terminal clearly distinguishes Buildroot demo mode from package workstation mode.
-* **Progress**:
+* **Verification**:
   - Added `scripts/build-alpine-initramfs.sh` to build `public/v86/alpine-initramfs.cpio.gz` from the official Alpine x86 minirootfs.
+  - Added `scripts/resolve-alpine-apks.mjs` to resolve package dependencies from Alpine `APKINDEX`.
   - Added `linux alpine`, `linux buildroot`, and `linux help` Terminal command handling.
-  - Documented the Alpine source URL, build command, artifact size, and generated SHA-256.
-  - Chrome DevTools MCP verified `linux alpine` boots Alpine `3.23.0` and exposes `/sbin/apk`.
-* **Remaining**:
-  - Provide a v86 DHCP/relay path or replace the initramfs profile with a fuller Alpine/Debian disk image with preinstalled `bash`, `curl`, and CA certificates; current local DHCP broadcasts do not receive a lease.
+  - Documented the Alpine source URL, build command, artifact size, generated SHA-256, and relay limits.
+  - Chrome DevTools MCP verified `linux alpine` boots Alpine `3.23.0`, exposes `/sbin/apk`, runs GNU bash `5.3.3`, runs curl `8.19.0` with `https` support, and receives DHCP lease `192.168.86.100` through v86 fetch relay.
+
+### 🎫 Issue Key: VORTEX-127
+* **Summary**: Add WISP Relay or Same-Origin APK Mirror for Live Alpine Installs
+* **Issue Type**: Story
+* **Priority**: Medium
+* **Status**: To Do
+* **Description**: The Alpine initramfs now includes bash, curl, CA certificates, apk, and v86 fetch-relay DHCP. Live `apk update` against external mirrors and direct guest `curl https://...` still need a CORS-compatible package mirror or WISP/full TCP relay because fetch relay does not tunnel arbitrary port 443 traffic.
+* **Acceptance Criteria**:
+  - `linux alpine` can run `apk update` without manual mirror/proxy setup.
+  - Guest `curl https://example.com` succeeds through a documented relay path.
+  - Terminal docs explain how to configure or operate the relay in development and production.
 
 ---
 

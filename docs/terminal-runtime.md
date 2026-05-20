@@ -140,18 +140,32 @@ Build or refresh the asset with:
 
 Current generated artifact:
 
-- Size: 3.4 MiB
-- SHA-256: `dcb6c73f061bc15fc992aabdacc3798295ab87e8929a050850177afd76c0996a`
+- Size: 6.6 MiB
+- SHA-256: `04a18c2267c09eda504a3a59e1982f275c0c490c8037b30b6b05788877e60bdf`
 
-The profile documents `/bin/sh` (BusyBox ash) as the default shell and includes Alpine `apk` from the minirootfs. Because this is a compact initramfs rather than a full workstation disk image, `bash`, `curl`, and CA certificates are installed through `apk` after the VM has network egress:
+The build script preinstalls:
+
+- `bash`
+- `curl`
+- `ca-certificates`
+- Alpine `apk`
+- the required shared-library dependencies for those packages
+
+The profile enables v86's built-in `fetch` network relay:
+
+```js
+network_relay_url: 'fetch'
+```
+
+That relay provides guest DHCP/DNS and browser-backed HTTP fetches. Direct guest HTTPS/TCP egress still requires a WISP/full TCP relay, because the fetch relay does not tunnel arbitrary port 443 connections.
+
+Inside the VM, bring up networking with:
 
 ```sh
 udhcpc -i eth0
-apk update
-apk add bash curl ca-certificates
 ```
 
-If `linux alpine` reports a missing initramfs asset, run the build script above. If `apk update` cannot reach mirrors, the VM booted correctly but v86 networking still needs a prepared DHCP/relay path or a fuller Alpine/Debian disk image with preinstalled packages.
+If `linux alpine` reports a missing initramfs asset, run the build script above. If mirror-backed `apk update` cannot reach external repositories, the VM booted correctly but needs either a CORS-compatible/same-origin APK mirror or a WISP/full TCP relay.
 
 ## Verification
 
@@ -172,4 +186,6 @@ Verified on 2026-05-21:
 - `./scripts/build-alpine-initramfs.sh` downloaded the official Alpine minirootfs and generated `public/v86/alpine-initramfs.cpio.gz`.
 - `linux help` documents the Buildroot and Alpine profiles separately.
 - Chrome DevTools MCP confirmed `linux alpine` boots to `/ #`, reports Alpine `3.23.0`, and exposes `/sbin/apk`.
-- Chrome DevTools MCP confirmed `eth0` is brought `UP`; DHCP still broadcasts without receiving a lease in the current local v86 setup, so mirror-backed `apk add` remains the open networking/disk-image part of VORTEX-126.
+- Chrome DevTools MCP confirmed `bash --version` returns GNU bash `5.3.3`.
+- Chrome DevTools MCP confirmed `curl --version` returns curl `8.19.0` with `https` protocol support and OpenSSL `3.5.6`.
+- Chrome DevTools MCP confirmed v86 fetch relay DHCP assigns `192.168.86.100` to `eth0`.

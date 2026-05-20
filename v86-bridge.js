@@ -21,6 +21,8 @@ class V86LinuxBridge {
       initrdUrl: config.initrdUrl || null,
       cdromUrl: config.cdromUrl || null,
       hdaUrl: config.hdaUrl || null,
+      networkRelayUrl: config.networkRelayUrl || null,
+      netDevice: config.netDevice || null,
       cmdline: config.cmdline || 'console=ttyS0 earlyprintk=serial,ttyS0 root=/dev/ram0 rw',
       memorySize: config.memorySize || 128 * 1024 * 1024,
       vgaMemorySize: config.vgaMemorySize || 8 * 1024 * 1024
