@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self';">
+  <title>Vortex OS - Vanilla Web Operating System</title>
+  <style>
+    :root {
+      --accent: #0a84ff;
+      --window-bg: #2a2a2c;
+      --titlebar: rgba(56, 56, 58, 0.92);
+      --text: #f2f2f7;
+      --text-dim: #98989f;
+      --menubar: rgba(22, 22, 24, 0.55);
+      --dock: rgba(120, 120, 128, 0.28);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+      background:
+        radial-gradient(ellipse 80% 60% at 25% 0%, rgba(122, 90, 210, 0.45), transparent 60%),
+        radial-gradient(ellipse 90% 70% at 85% 100%, rgba(30, 120, 210, 0.40), transparent 60%),
+        linear-gradient(165deg, #241a44 0%, #14143a 45%, #0c1330 100%);
+    }
+
+    /* Top Menu Bar */
+    #menubar {
+      position: relative;
+      z-index: 100;
+      height: 28px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+      background: var(--menubar);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      font-size: 13px;
+    }
+
+    .menu-section { display: flex; align-items: center; }
+
+    .menu-item {
+      padding: 3px 9px;
+      border-radius: 5px;
+      cursor: default;
+      display: flex;
+      align-items: center;
+      line-height: 1;
+    }
+
+    .menu-item:hover { background: rgba(255, 255, 255, 0.18); }
+    .menu-app { font-weight: 600; }
+    .menu-logo { padding: 3px 8px; }
+    .menu-clock { font-variant-numeric: tabular-nums; }
+    .menu-status svg, .menu-logo svg { display: block; }
+
+    /* Desktop Wallpaper & Icons Grid */
+    #desktop {
+      flex: 1;
+      position: relative;
+      padding: 18px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, 96px);
+      grid-auto-rows: 96px;
+      gap: 12px;
+      align-content: start;
+    }
+
+    .desktop-icon {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: background 0.15s, transform 0.1s;
+      user-select: none;
+    }
+
+    .desktop-icon:hover { background: rgba(255, 255, 255, 0.14); }
+    .desktop-icon:active { transform: scale(0.95); }
+
+    .icon-img {
+      font-size: 38px;
+      margin-bottom: 6px;
+    }
+
+    .icon-label {
+      font-size: 12px;
+      text-align: center;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    }
+
+    /* Dock at the bottom */
+    #dock-container {
+      position: relative;
+      z-index: 100;
+      flex-shrink: 0;
+      display: flex;
+      justify-content: center;
+      padding: 0 0 6px;
+    }
+
+    #dock {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      padding: 6px;
+      background: var(--dock);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 20px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    }
+
+    .dock-app {
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 34px;
+      border-radius: 13px;
+      cursor: pointer;
+      transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+      transform-origin: bottom center;
+    }
+
+    .dock-app:hover { transform: scale(1.35) translateY(-6px); }
+    .dock-app:active { transform: scale(1.1) translateY(-2px); }
+
+    .dock-divider {
+      width: 1px;
+      height: 40px;
+      margin: 0 4px;
+      align-self: center;
+      background: rgba(255, 255, 255, 0.22);
+    }
+
+    /* Window UI Component */
+    .window {
+      position: absolute;
+      width: 540px;
+      height: 400px;
+      background: var(--window-bg);
+      border: 1px solid rgba(0, 0, 0, 0.4);
+      border-radius: 11px;
+      box-shadow: 0 22px 60px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transform: translate3d(50px, 50px, 0);
+      will-change: transform;
+    }
+
+    .window-header {
+      position: relative;
+      height: 38px;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      background: var(--titlebar);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.35);
+      cursor: move;
+      user-select: none;
+    }
+
+    .window-controls {
+      display: flex;
+      gap: 8px;
+      z-index: 2;
+    }
+
+    .win-btn {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.18);
+    }
+
+    .win-close { background: #ff5f57; }
+    .win-min { background: #febc2e; }
+    .win-max { background: #28c840; }
+
+    .win-btn::before {
+      font-size: 9px;
+      font-weight: 700;
+      color: rgba(0, 0, 0, 0.55);
+      opacity: 0;
+      transition: opacity 0.12s;
+    }
+
+    .window-controls:hover .win-close::before { content: '\00d7'; opacity: 1; }
+    .window-controls:hover .win-min::before { content: '\2212'; opacity: 1; }
+    .window-controls:hover .win-max::before { content: '\002b'; opacity: 1; }
+
+    .window-title {
+      position: absolute;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      pointer-events: none;
+    }
+
+    .window-body {
+      flex: 1;
+      position: relative;
+      background: #1e1e1e;
+    }
+
+    .window-body iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: #1e1e1e;
+    }
+
+    /* Add App Modal */
+    #add-app-modal {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 360px;
+      background: rgba(44, 44, 46, 0.96);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      padding: 22px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+      z-index: 10000;
+    }
+
+    #add-app-modal h3 { margin: 0 0 6px; font-size: 16px; color: var(--text); }
+    #add-app-modal p { font-size: 12px; color: var(--text-dim); margin: 0 0 14px; }
+
+    #manifest-url-input {
+      width: 100%;
+      padding: 8px 10px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 7px;
+      color: var(--text);
+      font-size: 13px;
+      margin-bottom: 18px;
+    }
+
+    #manifest-url-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3);
+    }
+
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+    .btn {
+      padding: 6px 14px;
+      border: none;
+      border-radius: 7px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .btn-secondary { background: rgba(255, 255, 255, 0.14); color: var(--text); }
+    .btn-primary { background: var(--accent); color: #fff; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Menu Bar -->
+  <div id="menubar">
+    <div class="menu-section">
+      <span class="menu-item menu-logo" title="Vortex OS">
+        <svg viewBox="0 0 384 512" width="13" height="13"><path fill="currentColor" d="M318.7 268c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C72.4 141.2 18 173.3 18 238.7c0 19.3 3.5 39.3 10.6 59.9 9.4 27.1 43.4 93.5 78.9 92.4 18.5-.4 31.6-13.1 55.7-13.1 23.4 0 35.5 13.1 56.1 13.1 35.8-.5 66.6-60.9 75.5-88.1-47.8-22.5-45.1-66-45.1-67.8zm-56.5-126.6c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>
+      </span>
+      <span class="menu-item menu-app">Vortex OS</span>
+      <span class="menu-item">File</span>
+      <span class="menu-item">Edit</span>
+      <span class="menu-item">View</span>
+      <span class="menu-item">Window</span>
+      <span class="menu-item">Help</span>
+    </div>
+    <div class="menu-section">
+      <span class="menu-item menu-status" title="Control Center">
+        <svg width="15" height="15" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="3" width="11" height="3.4" rx="1.7"/><rect x="2.5" y="9.6" width="11" height="3.4" rx="1.7"/></g><circle cx="5.4" cy="4.7" r="1.5" fill="currentColor"/><circle cx="10.6" cy="11.3" r="1.5" fill="currentColor"/></svg>
+      </span>
+      <span class="menu-item menu-status" title="Wi-Fi">
+        <svg width="16" height="11" viewBox="0 0 16 11"><path fill="currentColor" d="M8 8.6a1.4 1.4 0 1 0 0 2.8 1.4 1.4 0 0 0 0-2.8zM3.9 5.8 5.3 7.2a3.8 3.8 0 0 1 5.4 0l1.4-1.4a5.8 5.8 0 0 0-8.2 0zM1 2.9l1.4 1.4a8 8 0 0 1 11.2 0L15 2.9a10 10 0 0 0-14 0z"/></svg>
+      </span>
+      <span class="menu-item menu-clock" id="menu-clock"></span>
+    </div>
+  </div>
+
+  <!-- Desktop Icons -->
+  <div id="desktop">
+    <div class="desktop-icon" onclick="openWindow('Storage Tests', 'test.html')">
+      <span class="icon-img">🧪</span>
+      <span class="icon-label">Storage Tests</span>
+    </div>
+  </div>
+
+  <!-- Add App Modal Dialog -->
+  <div id="add-app-modal">
+    <h3>Add Dynamic Plugin App</h3>
+    <p>Input the dynamic Manifest URL to fetch and install into Vortex OS desktop:</p>
+    <input type="text" id="manifest-url-input" placeholder="http://localhost:5173/manifest.json">
+    <div class="modal-actions">
+      <button id="cancel-modal-btn" class="btn btn-secondary">Cancel</button>
+      <button id="install-app-btn" class="btn btn-primary">Install App</button>
+    </div>
+  </div>
+
+  <!-- Dock -->
+  <div id="dock-container">
+    <div id="dock">
+      <div class="dock-app" title="Dashboard">🌌</div>
+      <div class="dock-app" title="Files">📂</div>
+      <div class="dock-app" title="Terminal" onclick="openWindow('Terminal', 'terminal.html')">💻</div>
+      <div class="dock-divider"></div>
+      <div class="dock-app" id="add-app-dock-btn" title="Add Sandboxed App">➕</div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { PluginHarness } from './host-core.js';
+    import { installManifest } from './plugin-installer.js';
+    import { CompressedStorageEngine } from './jsonl-storage-engine.js';
+    import { SystemEventBus, CapabilityGuard, OrchestratorAgent } from './agent-core.js';
+
+    let zIndexCounter = 10;
+    let installedApps = loadInstalledApps();
+
+    // Validate localStorage entries before use — guards against corrupt or
+    // manually tampered data causing crashes at render time.
+    function loadInstalledApps() {
+      try {
+        const raw = localStorage.getItem('vortex_installed_apps');
+        if (!raw) return [];
+        const apps = JSON.parse(raw);
+        if (!Array.isArray(apps)) return [];
+        return apps.filter(app =>
+          app &&
+          typeof app.manifest === 'object' && app.manifest !== null &&
+          typeof app.manifest.id === 'string' && app.manifest.id &&
+          typeof app.manifest.name === 'string' && app.manifest.name &&
+          typeof app.manifest.entrypoint === 'string' && app.manifest.entrypoint &&
+          typeof app.manifestUrl === 'string' && app.manifestUrl
+        );
+      } catch {
+        return [];
+      }
+    }
+
+    // Prevents unbounded z-index growth: reset all open windows to sequential
+    // values once the counter approaches the CSS safe limit.
+    function nextZIndex() {
+      if (zIndexCounter >= 9000) {
+        const wins = [...document.querySelectorAll('.window')];
+        wins.forEach((w, i) => { w.style.zIndex = 10 + i; });
+        zIndexCounter = 10 + wins.length - 1;
+      }
+      return ++zIndexCounter;
+    }
+
+    // Build the window chrome (header + traffic-light buttons) using DOM APIs so
+    // title text is assigned via textContent — never via innerHTML — preventing
+    // XSS from manifest metadata injecting markup into the host page.
+    // Controls render left-of-title in macOS order: close, minimize, maximize.
+    function buildWindowChrome(titleText) {
+      const header = document.createElement('div');
+      header.className = 'window-header';
+
+      const titleEl = document.createElement('div');
+      titleEl.className = 'window-title';
+      titleEl.textContent = titleText;
+
+      const controls = document.createElement('div');
+      controls.className = 'window-controls';
+
+      ['win-close', 'win-min', 'win-max'].forEach(cls => {
+        const btn = document.createElement('button');
+        btn.className = `win-btn ${cls}`;
+        controls.appendChild(btn);
+      });
+
+      header.append(controls, titleEl);
+      return { header, closeBtn: controls.querySelector('.win-close') };
+    }
+
+    // VORTEX-104: kernel event bus + background multi-agent orchestrator.
+    // VORTEX-102: the storage engine doubles as the VFS the orchestrator
+    // auto-saves activity reports into.
+    const systemBus = new SystemEventBus();
+    const storageEngine = new CompressedStorageEngine();
+    let orchestrator = null;
+
+    (async () => {
+      await storageEngine.init();
+      // The kernel grants the orchestrator exactly the capabilities it needs.
+      const orchestratorGuard = new CapabilityGuard(['agent:orchestrate', 'fs:write:/reports']);
+      orchestrator = new OrchestratorAgent({
+        bus: systemBus,
+        storage: storageEngine,
+        guard: orchestratorGuard
+      });
+      orchestrator.start();
+    })();
+
+    // Durability barrier (VORTEX-102): commit pending auto-save buffers on exit.
+    window.addEventListener('beforeunload', () => { storageEngine.flushAll(); });
+
+    // Kernel introspection surface (read access for the console / system apps).
+    window.vortexKernel = {
+      bus: systemBus,
+      storage: storageEngine,
+      get orchestrator() { return orchestrator; }
+    };
+
+    // Setup dragging logic with GPU Hardware Acceleration
+    function setupDragging(win, header, initialX, initialY) {
+      let isDragging = false;
+      let startX, startY;
+      let currentX = initialX, currentY = initialY;
+
+      header.addEventListener('pointerdown', (e) => {
+        isDragging = true;
+        startX = e.clientX - currentX;
+        startY = e.clientY - currentY;
+        header.setPointerCapture(e.pointerId);
+      });
+
+      header.addEventListener('pointermove', (e) => {
+        if (!isDragging) return;
+        currentX = e.clientX - startX;
+        currentY = e.clientY - startY;
+        win.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
+      });
+
+      header.addEventListener('pointerup', (e) => {
+        isDragging = false;
+        header.releasePointerCapture(e.pointerId);
+      });
+    }
+
+    // Standard Window Opener for normal frames
+    window.openWindow = function(title, src) {
+      const desktop = document.getElementById('desktop');
+
+      const win = document.createElement('div');
+      win.className = 'window';
+      win.style.zIndex = nextZIndex();
+
+      const offsetX = 60 + (zIndexCounter % 5) * 30;
+      const offsetY = 60 + (zIndexCounter % 5) * 30;
+      win.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0)`;
+
+      const { header, closeBtn } = buildWindowChrome(title);
+
+      const body = document.createElement('div');
+      body.className = 'window-body';
+
+      const iframe = document.createElement('iframe');
+      iframe.src = src;
+      body.appendChild(iframe);
+
+      win.append(header, body);
+
+      closeBtn.addEventListener('click', () => win.remove());
+      win.addEventListener('pointerdown', () => { win.style.zIndex = nextZIndex(); });
+
+      setupDragging(win, header, offsetX, offsetY);
+      desktop.appendChild(win);
+
+      // VORTEX-104: surface the launch as a system trigger on the event bus.
+      systemBus.emit('app:launch', { title, src, kind: 'system' });
+    };
+
+    // Advanced Window Opener for Sandboxed Plugins
+    window.launchPlugin = function(manifest, manifestUrl) {
+      const desktop = document.getElementById('desktop');
+      const win = document.createElement('div');
+      win.className = 'window';
+      win.style.zIndex = nextZIndex();
+
+      const offsetX = 100 + (zIndexCounter % 5) * 30;
+      const offsetY = 100 + (zIndexCounter % 5) * 30;
+      win.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0)`;
+
+      const { header, closeBtn } = buildWindowChrome(`${manifest.name} (v${manifest.version})`);
+
+      const body = document.createElement('div');
+      body.className = 'window-body';
+
+      win.append(header, body);
+
+      win.addEventListener('pointerdown', () => { win.style.zIndex = nextZIndex(); });
+
+      setupDragging(win, header, offsetX, offsetY);
+      desktop.appendChild(win);
+
+      // Resolve absolute entrypoint relative to manifest URL
+      const resolvedEntrypoint = new URL(manifest.entrypoint, manifestUrl).href;
+
+      const harness = new PluginHarness(manifest, resolvedEntrypoint);
+      harness.mount(body);
+
+      closeBtn.addEventListener('click', () => {
+        harness.destroy();
+        win.remove();
+      });
+
+      // VORTEX-104: surface the plugin launch as a system trigger.
+      systemBus.emit('app:launch', { app: manifest.id, name: manifest.name, kind: 'plugin' });
+    };
+
+    // Render installed plugins dynamically
+    function renderInstalledApps() {
+      const desktop = document.getElementById('desktop');
+      desktop.querySelectorAll('.plugin-app-icon').forEach(icon => icon.remove());
+
+      installedApps.forEach(app => {
+        const icon = document.createElement('div');
+        icon.className = 'desktop-icon plugin-app-icon';
+        icon.onclick = () => window.launchPlugin(app.manifest, app.manifestUrl);
+
+        const iconImg = document.createElement('span');
+        iconImg.className = 'icon-img';
+        iconImg.textContent = '🧩';
+
+        const iconLabel = document.createElement('span');
+        iconLabel.className = 'icon-label';
+        iconLabel.textContent = app.manifest.name;
+
+        icon.append(iconImg, iconLabel);
+        desktop.appendChild(icon);
+      });
+    }
+
+    // Modal control helper
+    const modal = document.getElementById('add-app-modal');
+    const addDockBtn = document.getElementById('add-app-dock-btn');
+    const cancelModalBtn = document.getElementById('cancel-modal-btn');
+    const installAppBtn = document.getElementById('install-app-btn');
+    const manifestInput = document.getElementById('manifest-url-input');
+
+    addDockBtn.addEventListener('click', () => {
+      modal.style.display = 'block';
+      manifestInput.value = window.location.origin + '/manifest.json';
+    });
+
+    cancelModalBtn.addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+
+    installAppBtn.addEventListener('click', async () => {
+      const url = manifestInput.value.trim();
+      if (!url) return;
+
+      try {
+        // VORTEX-103: origin-validated fetch (direct + CORS-proxy fallback)
+        // followed by strict manifest sanitization.
+        const { manifest, manifestUrl } = await installManifest(url);
+
+        // Avoid duplication
+        installedApps = installedApps.filter(app => app.manifest.id !== manifest.id);
+        installedApps.push({ manifest, manifestUrl });
+        localStorage.setItem('vortex_installed_apps', JSON.stringify(installedApps));
+
+        renderInstalledApps();
+        modal.style.display = 'none';
+        alert(`Successfully installed sandboxed application: ${manifest.name}!`);
+      } catch (err) {
+        alert(`Installation failed: ${err.message}`);
+      }
+    });
+
+    // Live menu bar clock
+    function updateClock() {
+      const d = new Date();
+      const date = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      let h = d.getHours();
+      const m = String(d.getMinutes()).padStart(2, '0');
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      h = h % 12 || 12;
+      document.getElementById('menu-clock').textContent = `${date}  ${h}:${m} ${ampm}`;
+    }
+    updateClock();
+    setInterval(updateClock, 10000);
+
+    // Initial render call on startup
+    renderInstalledApps();
+  </script>
+</body>
+</html>
