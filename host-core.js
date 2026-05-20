@@ -60,9 +60,15 @@ class PluginHarness {
     // Per-plugin SYSTEM_NOTIFY rate limit: max 3 per 60-second window.
     this._notifyCount = 0;
     this._notifyWindowEnd = 0;
+    this.windowElement = null;
   }
 
   mount(containerElement) {
+    this.windowElement = containerElement.closest('.window');
+    if (this.windowElement) {
+      this.windowElement._ipcCount = 0;
+    }
+
     this.iframe = document.createElement('iframe');
     this.iframe.style.width = '100%';
     this.iframe.style.height = '100%';
@@ -90,6 +96,10 @@ class PluginHarness {
   }
 
   async handleIpcRequest(event) {
+    if (this.windowElement) {
+      this.windowElement._ipcCount = (this.windowElement._ipcCount || 0) + 1;
+    }
+
     const { action, payload, token } = event.data;
 
     // Outer check: token must be in the plugin's declared capability set.
@@ -198,6 +208,10 @@ class PluginHarness {
   destroy() {
     if (this.iframe) this.iframe.remove();
     if (this.channel) this.channel.port1.close();
+    if (this.windowElement) {
+      this.windowElement._ipcCount = 0;
+      this.windowElement = null;
+    }
   }
 }
 export { PluginHarness };

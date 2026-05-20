@@ -290,10 +290,9 @@
         }
       });
 
-      // Fill area under line
-      const pathLine = new Path2D(ctx);
       ctx.stroke();
 
+      // Fill area under line.
       ctx.lineTo((latencyHistory.length - 1) * stepX, h);
       ctx.lineTo(0, h);
       ctx.closePath();

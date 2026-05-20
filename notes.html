@@ -118,7 +118,9 @@
     <textarea id="editor" placeholder="Start typing here... Your changes will be automatically debounced (500ms) and saved into the compressed VFS in real-time." disabled></textarea>
   </div>
 
-  <script>
+  <script type="module">
+    import { CompressedStorageEngine } from './jsonl-storage-engine.js';
+
     const editor = document.getElementById('editor');
     const status = document.getElementById('status');
     const statusText = document.getElementById('status-text');
@@ -127,15 +129,17 @@
     let storage = null;
     let checkTimer = null;
 
-    // Connect to Vortex OS Kernel Storage Engine
-    function initConnection() {
-      if (!window.parent || !window.parent.vortexKernel) {
+    // Connect to the same IndexedDB-backed VFS without exposing the host
+    // kernel's storage object across the iframe boundary.
+    async function initConnection() {
+      try {
+        storage = new CompressedStorageEngine();
+        await storage.init();
+        loadNote();
+      } catch (err) {
+        console.error('[Note VFS Init Error]', err);
         setOfflineMode();
-        return;
       }
-
-      storage = window.parent.vortexKernel.storage;
-      loadNote();
     }
 
     function setOfflineMode() {

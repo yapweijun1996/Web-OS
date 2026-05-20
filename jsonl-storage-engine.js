@@ -17,7 +17,7 @@ class CompressedStorageEngine {
 
       request.onblocked = () => {
         console.warn(`[VFS] Database '${this.dbName}' connection blocked by another active tab!`);
-        if (window.parent && window.parent.vortexKernel) {
+        if (window.parent?.vortexKernel?.bus) {
           window.parent.vortexKernel.bus.emit('vfs:blocked', { dbName: this.dbName });
         }
       };
@@ -36,7 +36,7 @@ class CompressedStorageEngine {
           console.warn(`[VFS] Database '${this.dbName}' is upgrading in another tab. Closing connection immediately.`);
           this.db.close();
           this.db = null;
-          if (window.parent && window.parent.vortexKernel) {
+          if (window.parent?.vortexKernel?.bus) {
             window.parent.vortexKernel.bus.emit('vfs:offline', { dbName: this.dbName });
           }
         };
