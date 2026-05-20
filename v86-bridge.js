@@ -4,18 +4,20 @@
 // v86 WebAssembly Linux VM running inside a dedicated Web Worker. It owns the
 // worker lifecycle and routes the stdin/stdout serial pipelines.
 
+const _V86 = import.meta.env.BASE_URL + 'v86/';
+
 class V86LinuxBridge {
   constructor(config = {}) {
     this.workerScript = config.workerScript || 'v86-worker.js';
 
-    // Runtime resources handed to the worker. Keep defaults same-origin so
-    // browser VM boot is not affected by remote hotlink or CORS failures.
+    // Runtime resources handed to the worker. Defaults use BASE_URL so paths
+    // resolve correctly regardless of the deployment sub-path (e.g. /Web-OS/).
     this.resources = {
-      libUrl: config.libUrl || '/v86/libv86.js',
-      wasmPath: config.wasmPath || '/v86/v86.wasm',
-      biosUrl: config.biosUrl || '/v86/seabios.bin',
-      vgaBiosUrl: config.vgaBiosUrl || '/v86/vgabios.bin',
-      bzimageUrl: config.bzimageUrl || '/v86/buildroot-bzimage68.bin',
+      libUrl: config.libUrl || `${_V86}libv86.js`,
+      wasmPath: config.wasmPath || `${_V86}v86.wasm`,
+      biosUrl: config.biosUrl || `${_V86}seabios.bin`,
+      vgaBiosUrl: config.vgaBiosUrl || `${_V86}vgabios.bin`,
+      bzimageUrl: config.bzimageUrl || `${_V86}buildroot-bzimage68.bin`,
       initrdUrl: config.initrdUrl || null,
       cdromUrl: config.cdromUrl || null,
       hdaUrl: config.hdaUrl || null,

@@ -3,6 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Cross-origin isolation shim so WebContainer works when this page is
+       opened standalone, not just as an iframe inside the COI host. -->
+  <script>
+    (() => {
+      const script = document.createElement('script');
+      script.async = false;
+      script.src = new URL('coi-serviceworker.js', window.location.href).href;
+      document.head.appendChild(script);
+    })();
+  </script>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <title>Terminal</title>
   <style>
@@ -36,6 +46,40 @@
     const PYODIDE_INDEX_URL = 'https://cdn.jsdelivr.net/pyodide/v0.29.4/full/';
     const NPM_GLOBAL_PREFIX = '/home/.npm-global';
     const NPM_CACHE_DIR = '/home/.npm';
+    const V86_BASE = import.meta.env.BASE_URL + 'v86/';
+    const LINUX_PROFILES = {
+      buildroot: {
+        name: 'Buildroot',
+        resources: [`${V86_BASE}libv86.js`, `${V86_BASE}buildroot-bzimage68.bin`],
+        config: {
+          libUrl: `${V86_BASE}libv86.js`,
+          bzimageUrl: `${V86_BASE}buildroot-bzimage68.bin`,
+          cmdline: 'console=ttyS0 earlyprintk=serial,ttyS0 root=/dev/ram0 rw',
+          memorySize: 128 * 1024 * 1024
+        },
+        readyPatterns: ['~%'],
+        readyMessage: [
+          '[Vortex OS] Linux shell ready. This Buildroot image has sh, but no bash/apk/node/python3 and no HTTPS curl.',
+          '[Vortex OS] Try: uname -a, ip addr, ifconfig, udhcpc. Use Vortex shell WebContainer for npm.'
+        ]
+      },
+      alpine: {
+        name: 'Alpine',
+        resources: [`${V86_BASE}libv86.js`, `${V86_BASE}buildroot-bzimage68.bin`, `${V86_BASE}alpine-initramfs.cpio.gz`],
+        config: {
+          libUrl: `${V86_BASE}libv86.js`,
+          bzimageUrl: `${V86_BASE}buildroot-bzimage68.bin`,
+          initrdUrl: `${V86_BASE}alpine-initramfs.cpio.gz`,
+          cmdline: 'console=ttyS0 earlyprintk=serial,ttyS0 root=/dev/ram0 rw init=/init',
+          memorySize: 192 * 1024 * 1024
+        },
+        readyPatterns: ['[Vortex OS] Alpine Linux initramfs ready.', '/ #', '~ #'],
+        readyMessage: [
+          '[Vortex OS] Alpine shell ready. Use /bin/sh; apk is available from the Alpine minirootfs.',
+          '[Vortex OS] For package installs, try: udhcpc -i eth0 && apk update && apk add bash curl ca-certificates.'
+        ]
+      }
+    };
     let loadPyodideModule = null;
 
     async function main() {
@@ -362,7 +406,27 @@
         term.writeln('Default Linux VM image: v86 Buildroot demo kernel.');
         term.writeln('Available for kernel/serial checks; not a package-install workstation.');
         term.writeln('Missing in this image: bash, apk, node, python3, and HTTPS-capable curl.');
-        term.writeln('Use WebContainer npm/Pyodide pip in Vortex shell, or add an Alpine/Debian disk image for full Linux package installs.');
+        term.writeln('Use WebContainer npm/Pyodide pip in Vortex shell, or run linux alpine after building /v86/alpine-initramfs.cpio.gz.');
+      }
+
+      function writeAlpineNotes() {
+        term.writeln('Alpine Linux VM profile: official Alpine x86 minirootfs as a v86 initramfs.');
+        term.writeln('Shell: /bin/sh (BusyBox ash). Package manager: apk.');
+        term.writeln('Network/package flow inside the VM: udhcpc -i eth0 && apk update && apk add bash curl ca-certificates.');
+      }
+
+      function writeLinuxHelp() {
+        term.writeln('VM commands:');
+        term.writeln('  linux             Boot the default Buildroot demo profile.');
+        term.writeln('  linux buildroot   Boot the Buildroot demo profile.');
+        term.writeln('  linux alpine      Boot the Alpine package-manager profile.');
+        term.writeln('  linux help        Show this VM help.');
+      }
+
+      async function resourceAvailable(url) {
+        return fetch(url, { method: 'HEAD' })
+          .then((res) => res.ok)
+          .catch(() => false);
       }
 
       async function runCommand(line) {
@@ -376,7 +440,7 @@
             term.writeln('Node: node -v | node index.js | npm -v | npm install <pkg> | npm i -g <pkg> | <global-bin>');
             term.writeln('Codex: codex explains the browser WebContainer native-binary limitation.');
             term.writeln('Python: python -V | python -c "print(123)" | write hello.py "print(123)" | python hello.py | pip install <pkg>');
-            term.writeln('VM: linux boots Buildroot for kernel/serial checks. Full bash/HTTPS/package installs need a prepared Alpine/Debian disk image.');
+            term.writeln('VM: linux | linux buildroot | linux alpine | linux help');
             break;
 
           case 'clear':
@@ -508,7 +572,7 @@
 
           case 'linux':
           case 'vm':
-            await startLinuxMode();
+            await startLinuxMode(args[0] || 'buildroot');
             break;
 
           case 'jslinux':
@@ -526,24 +590,47 @@
         }
       }
 
-      async function startLinuxMode() {
+      async function startLinuxMode(profileName = 'buildroot') {
         if (mode === 'linux') return;
-        const libAvailable = await fetch('/v86/libv86.js', { method: 'HEAD' })
-          .then((res) => res.ok)
-          .catch(() => false);
-        if (!libAvailable) {
-          term.writeln('Linux VM runtime assets are not installed: missing /v86/libv86.js.');
-          term.writeln('Run npm install and ensure public/v86 contains libv86.js, v86.wasm, and v86-fallback.wasm.');
+        if (profileName === 'help' || profileName === '--help' || profileName === '-h') {
+          writeLinuxHelp();
           return;
         }
 
-        term.writeln('Starting v86 real-kernel Linux VM...');
-        writeLinuxLimitations();
+        const profile = LINUX_PROFILES[profileName];
+        if (!profile) {
+          term.writeln(`Unknown Linux VM profile: ${profileName}`);
+          writeLinuxHelp();
+          return;
+        }
+
+        const missingResources = [];
+        for (const resource of profile.resources) {
+          if (!(await resourceAvailable(resource))) {
+            missingResources.push(resource);
+          }
+        }
+
+        if (missingResources.length) {
+          term.writeln(`Linux VM profile "${profileName}" is missing required assets:`);
+          missingResources.forEach((resource) => term.writeln(`  ${resource}`));
+          if (profileName === 'alpine') {
+            term.writeln('Build it with: ./scripts/build-alpine-initramfs.sh');
+          } else {
+            term.writeln('Run npm install and ensure public/v86 contains libv86.js, v86.wasm, v86-fallback.wasm, and buildroot-bzimage68.bin.');
+          }
+          return;
+        }
+
+        term.writeln(`Starting v86 ${profile.name} Linux VM...`);
+        if (profileName === 'alpine') writeAlpineNotes();
+        else writeLinuxLimitations();
         mode = 'linux';
         const channel = new MessageChannel();
         linuxPort = channel.port2;
         let linuxReadyHintShown = false;
         bridge = new V86LinuxBridge({
+          ...profile.config,
           onStatusChange(status) {
             if (status === 'error') {
               mode = 'shell';
@@ -558,11 +645,10 @@
         linuxPort.onmessage = (event) => {
           if (event.data && event.data.action === 'STDOUT') {
             term.write(event.data.data);
-            if (!linuxReadyHintShown && event.data.data.includes('~%')) {
+            if (!linuxReadyHintShown && profile.readyPatterns.some((pattern) => event.data.data.includes(pattern))) {
               linuxReadyHintShown = true;
               term.writeln('');
-              term.writeln('[Vortex OS] Linux shell ready. This Buildroot image has sh, but no bash/apk/node/python3 and no HTTPS curl.');
-              term.writeln('[Vortex OS] Try: uname -a, ip addr, ifconfig, udhcpc. Use Vortex shell WebContainer for npm.');
+              profile.readyMessage.forEach((message) => term.writeln(message));
             }
           }
         };

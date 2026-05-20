@@ -4,6 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://kb.yapweijun1996.com https:; frame-src 'self' http: https:; worker-src 'self' blob:;">
+  <!-- Makes the page cross-origin isolated on hosts that cannot send COOP/COEP
+       headers (e.g. GitHub Pages), so SharedArrayBuffer / WebContainer work. -->
+  <script>
+    (() => {
+      const script = document.createElement('script');
+      script.async = false;
+      script.src = new URL('coi-serviceworker.js', window.location.href).href;
+      document.head.appendChild(script);
+    })();
+  </script>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <title>Vortex OS - Vanilla Web Operating System</title>
   <style>
