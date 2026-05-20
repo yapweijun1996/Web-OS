@@ -76,7 +76,7 @@
         readyPatterns: ['[Vortex OS] Alpine Linux initramfs ready.', '/ #', '~ #'],
         readyMessage: [
           '[Vortex OS] Alpine shell ready. Use /bin/sh; apk is available from the Alpine minirootfs.',
-          '[Vortex OS] For package installs, try: udhcpc -i eth0 && apk update && apk add bash curl ca-certificates.'
+          '[Vortex OS] For package installs, v86 networking must receive DHCP before apk can reach mirrors.'
         ]
       }
     };
@@ -412,7 +412,7 @@
       function writeAlpineNotes() {
         term.writeln('Alpine Linux VM profile: official Alpine x86 minirootfs as a v86 initramfs.');
         term.writeln('Shell: /bin/sh (BusyBox ash). Package manager: apk.');
-        term.writeln('Network/package flow inside the VM: udhcpc -i eth0 && apk update && apk add bash curl ca-certificates.');
+        term.writeln('When v86 networking has a DHCP path: udhcpc -i eth0 && apk update && apk add bash curl ca-certificates.');
       }
 
       function writeLinuxHelp() {

@@ -72,7 +72,7 @@ Pyodide is loaded at runtime from the official CDN module URL instead of being s
 
 ## v86 Linux Mode
 
-The `linux` command boots a real Linux kernel through v86 in a Web Worker. Default VM assets are served from `public/v86/` so the browser does not depend on remote hotlink or CORS behavior at boot time:
+The `linux` command boots a real Linux kernel through v86 in a Web Worker. VM assets are served from `public/v86/` so the browser does not depend on remote hotlink or CORS behavior at boot time:
 
 - `libv86.js`
 - `v86.wasm`
@@ -80,8 +80,20 @@ The `linux` command boots a real Linux kernel through v86 in a Web Worker. Defau
 - `seabios.bin`
 - `vgabios.bin`
 - `buildroot-bzimage68.bin`
+- `alpine-initramfs.cpio.gz` for the optional Alpine profile
 
-The default image is the official v86 Buildroot kernel image. It is useful for proving real-kernel serial boot, but it is not Alpine and is not a package-install workstation.
+Available VM commands:
+
+```text
+linux
+linux buildroot
+linux alpine
+linux help
+```
+
+### Buildroot Profile
+
+The default `linux` / `linux buildroot` profile uses the official v86 Buildroot kernel image. It is useful for proving real-kernel serial boot, but it is not Alpine and is not a package-install workstation.
 
 Known missing tools in the default Buildroot image:
 
@@ -104,7 +116,42 @@ The observed failure is:
 curl: (1) Protocol "https" not supported
 ```
 
-This is an image capability limit, not a v86 boot failure. To support package-manager installs inside the VM, add a prepared Alpine or Debian disk image and pass it as `hdaUrl` or `cdromUrl` through `V86LinuxBridge`. Until then, use WebContainer for Node/npm and Pyodide for Python/pip.
+This is an image capability limit, not a v86 boot failure. Use WebContainer for Node/npm and Pyodide for Python/pip, or use the Alpine profile for an `apk`-based Linux userspace.
+
+### Alpine Profile
+
+The `linux alpine` profile boots the same v86 kernel with a locally generated Alpine initramfs:
+
+```text
+public/v86/alpine-initramfs.cpio.gz
+```
+
+The initramfs is built from the official Alpine x86 minirootfs:
+
+```text
+https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86/alpine-minirootfs-3.23.0-x86.tar.gz
+```
+
+Build or refresh the asset with:
+
+```bash
+./scripts/build-alpine-initramfs.sh
+```
+
+Current generated artifact:
+
+- Size: 3.4 MiB
+- SHA-256: `af6584538b34146e0048fc1c0b22d632d08b271ef5c306a4bc57a66eb03f201c`
+
+The profile documents `/bin/sh` (BusyBox ash) as the default shell and includes Alpine `apk` from the minirootfs. Because this is a compact initramfs rather than a full workstation disk image, `bash`, `curl`, and CA certificates are installed through `apk` after the VM has network egress:
+
+```sh
+udhcpc -i eth0
+apk update
+apk add bash curl ca-certificates
+```
+
+If `linux alpine` reports a missing initramfs asset, run the build script above. If `apk update` cannot reach mirrors, the VM booted correctly but v86 networking still needs a prepared network path or a fuller Alpine/Debian disk image.
 
 ## Verification
 
@@ -119,3 +166,8 @@ Verified on 2026-05-20 with Chrome DevTools MCP against `http://localhost:5176/`
 - The default Buildroot VM returned `python3: not found`, `node: not found`, `apk: not found`, `bash: not found`, and `curl: (1) Protocol "https" not supported`.
 - Terminal `help` now states that full bash/HTTPS/package installs require a prepared Alpine/Debian disk image.
 - `npm run build` completed without Pyodide externalization warnings.
+
+Verified on 2026-05-21:
+
+- `./scripts/build-alpine-initramfs.sh` downloaded the official Alpine minirootfs and generated `public/v86/alpine-initramfs.cpio.gz`.
+- `linux help` documents the Buildroot and Alpine profiles separately.
