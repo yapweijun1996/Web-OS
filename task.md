@@ -82,7 +82,7 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
 * **Summary**: Resolve Terminal Iframe Direct Load and Missing Worker Assets
 * **Issue Type**: Bug
 * **Priority**: Critical
-* **Status**: To Do
+* **Status**: Done
 * **Description**: Resolve the blank screen/script execution error caused by loading raw `v86-bridge.js` inside the Terminal iframe. Create a proper `terminal.html` plugin using a terminal emulator UI like `xterm.js`, and provide placeholder assets for `v86-worker.js` and `alpine.img`.
 * **Acceptance Criteria**:
   - Clicking Terminal icon loads `terminal.html` rather than raw script.

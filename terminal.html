@@ -5,40 +5,72 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Terminal</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: #11111b;
-      color: #a6e3a1;
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 13px;
-      padding: 16px;
-      height: 100vh;
-      overflow: auto;
+    html, body { margin: 0; height: 100%; background: #1e1e2e; }
+    #term {
+      height: 100%;
+      width: 100%;
+      padding: 6px;
+      box-sizing: border-box;
     }
-    .prompt { color: #89b4fa; }
-    .output { color: #6c7086; margin: 4px 0 12px 0; line-height: 1.6; }
-    .notice {
-      background: #1e1e2e;
-      border: 1px solid #45475a;
-      border-radius: 4px;
-      padding: 12px 14px;
-      margin-top: 12px;
-      color: #f9e2af;
-      font-size: 12px;
-      line-height: 1.7;
-    }
-    code { color: #cba6f7; }
   </style>
 </head>
 <body>
-  <div><span class="prompt">vortex@os:~$</span> uname -a</div>
-  <div class="output">Vortex OS &mdash; WebAssembly/x86 Terminal Bridge v0.1</div>
-  <div><span class="prompt">vortex@os:~$</span> status</div>
-  <div class="output">&#9888; v86 Wasm emulator not loaded in this build.</div>
-  <div class="notice">
-    The <code>V86LinuxBridge</code> is implemented in <code>v86-bridge.js</code> and ready to wire up.<br>
-    Next step (VORTEX-101): bundle a v86 Web Worker + Alpine Linux disk image and
-    register the worker path in the bridge constructor to activate this terminal.
-  </div>
+  <div id="term"></div>
+
+  <!--
+    VORTEX-106: Terminal plugin.
+    A real xterm.js terminal emulator wired to the v86 WebAssembly Linux VM
+    through V86LinuxBridge. The terminal UI and the bridge communicate over a
+    MessageChannel: keystrokes travel out as STDIN, serial output comes back
+    as STDOUT. When the v86 binaries are absent the bridge reports a BOOT_ERROR
+    which is rendered inline, so the terminal degrades gracefully.
+  -->
+  <script type="module">
+    import { Terminal } from '@xterm/xterm';
+    import { FitAddon } from '@xterm/addon-fit';
+    import '@xterm/xterm/css/xterm.css';
+    import { V86LinuxBridge } from './v86-bridge.js';
+
+    // --- Terminal emulator UI ---
+    const term = new Terminal({
+      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+      fontSize: 13,
+      cursorBlink: true,
+      convertEol: true,
+      theme: { background: '#1e1e2e', foreground: '#cdd6f4', cursor: '#cba6f7' }
+    });
+    const fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(document.getElementById('term'));
+    fitAddon.fit();
+    window.addEventListener('resize', () => fitAddon.fit());
+
+    term.writeln('Vortex OS Terminal — v86 WebAssembly Linux bridge');
+    term.writeln('Booting Linux VM worker...');
+    term.writeln('');
+
+    // --- Wire the terminal to V86LinuxBridge over a MessageChannel ---
+    // The bridge owns port1 (listens for STDIN, emits STDOUT); the terminal
+    // owns port2 (emits STDIN, renders STDOUT).
+    const bridge = new V86LinuxBridge();
+    const channel = new MessageChannel();
+
+    // Register the terminal port BEFORE init() so an early BOOT_ERROR broadcast
+    // still reaches this terminal.
+    bridge.registerTerminalPort('terminal-main', channel.port1);
+
+    channel.port2.onmessage = (event) => {
+      if (event.data && event.data.action === 'STDOUT') {
+        term.write(event.data.data);
+      }
+    };
+
+    // Keystrokes -> STDIN -> bridge -> worker -> v86 serial port.
+    term.onData((data) => {
+      channel.port2.postMessage({ action: 'STDIN', data });
+    });
+
+    bridge.init();
+  </script>
 </body>
 </html>
