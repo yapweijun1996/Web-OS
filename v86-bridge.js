@@ -112,5 +112,18 @@ class V86LinuxBridge {
       this.subscribers.delete(portId);
     }
   }
+
+  // Terminates the emulator worker and closes all terminal ports. Call when
+  // the terminal window is closed to release the Web Worker and its WASM heap.
+  destroy() {
+    for (const portId of [...this.subscribers.keys()]) {
+      this.unregisterTerminalPort(portId);
+    }
+    if (this.worker) {
+      this.worker.terminate();
+      this.worker = null;
+    }
+    this._setStatus('idle');
+  }
 }
 export { V86LinuxBridge };

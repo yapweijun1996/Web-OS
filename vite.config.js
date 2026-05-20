@@ -27,6 +27,7 @@ function strictCspPlugin() {
 }
 
 export default defineConfig({
+  base: '/Web-OS/',
   plugins: [strictCspPlugin()],
   server: {
     headers: {

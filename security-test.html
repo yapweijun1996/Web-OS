@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Vortex OS — Security &amp; Capability Tests</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #1e1e2e;
+      color: #cdd6f4;
+      padding: 20px;
+    }
+    h1 { color: #89b4fa; border-bottom: 2px solid #45475a; padding-bottom: 10px; }
+    h2 { margin: 0 0 16px; font-size: 15px; }
+    .section-heading {
+      color: #cba6f7;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      margin: 24px 0 8px;
+      border-bottom: 1px solid #45475a;
+      padding-bottom: 4px;
+    }
+    .test-case {
+      background: #313244;
+      border-radius: 6px;
+      padding: 12px 15px;
+      margin-bottom: 8px;
+      border-left: 4px solid #45475a;
+    }
+    .test-case.pass { border-left-color: #a6e3a1; }
+    .test-case.fail { border-left-color: #f38ba8; }
+    .test-case h3 { margin: 0 0 6px; font-size: 13px; color: #cdd6f4; }
+    .status { font-weight: bold; }
+    .status.pass { color: #a6e3a1; }
+    .status.fail { color: #f38ba8; }
+    pre {
+      margin: 0;
+      background: #181825;
+      padding: 8px 10px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    #summary { padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; font-weight: 600; }
+    #summary.all-pass { background: rgba(166,227,161,.15); color: #a6e3a1; }
+    #summary.has-fail  { background: rgba(243,139,168,.15); color: #f38ba8; }
+  </style>
+</head>
+<body>
+  <h1>Security &amp; Capability Model — Test Suite</h1>
+  <div id="results"><p style="color:#6c7086">Running…</p></div>
+
+  <script type="module">
+    import { CapabilitySet } from './capability.js';
+    import { sanitizeManifest, isOriginAllowed } from './plugin-installer.js';
+    import { PluginHarness } from './host-core.js';
+    import { SystemEventBus, OrchestratorAgent } from './agent-core.js';
+    import { IpcActions, SystemEvents } from './contracts.js';
+
+    const MANIFEST_BASE = 'https://raw.githubusercontent.com/test/repo/main/manifest.json';
+
+    // Minimal stubs so PluginHarness tests don't need a real IndexedDB or KB server.
+    const mockStorage = () => ({
+      appendToGzFile: async () => {},
+      readGzFileLines: async () => [],
+      queueLine: () => {},
+    });
+
+    const mockKbProxy = () => ({ read: async () => ({}), write: async () => ({}) });
+
+    // Build a PluginHarness whose IPC channel is wired to a local array so
+    // handleIpcRequest responses are inspectable without a real iframe.
+    function makeHarness(permissions, storage) {
+      const manifest = {
+        id: 'com.test.plugin',
+        name: 'Test Plugin',
+        version: '1.0.0',
+        entrypoint: 'http://localhost/plugin.html',
+        permissions,
+        sandbox: { allowScripts: true, allowDownloads: false, allowSameOrigin: false }
+      };
+      const harness = new PluginHarness(manifest, manifest.entrypoint, mockKbProxy(), storage || mockStorage());
+      const responses = [];
+      harness.channel = { port1: { postMessage: (msg) => responses.push(msg) } };
+      return { harness, responses };
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // Test cases grouped by module
+    // ─────────────────────────────────────────────────────────
+
+    const GROUPS = [
+      {
+        heading: 'capability.js — CapabilitySet',
+        cases: [
+          {
+            name: 'has(): granted → true, other → false',
+            fn() {
+              const cs = new CapabilitySet(['a:b', 'x:y']);
+              if (!cs.has('a:b')) throw new Error('has(a:b) should be true');
+              if (cs.has('a:c'))  throw new Error('has(a:c) should be false');
+              return 'has() returns true/false correctly';
+            }
+          },
+          {
+            name: 'has(): empty grant list → always false',
+            fn() {
+              if (new CapabilitySet([]).has('system:notify')) throw new Error('Expected false');
+              return 'Empty set never grants anything';
+            }
+          },
+          {
+            name: 'request(): granted → returns token',
+            fn() {
+              const result = new CapabilitySet(['x:y']).request('x:y');
+              if (result !== 'x:y') throw new Error(`Expected 'x:y', got '${result}'`);
+              return 'request() returns the token string';
+            }
+          },
+          {
+            name: 'request(): not granted → throws exact denial message',
+            fn() {
+              try { new CapabilitySet([]).request('x:y'); throw new Error('No throw'); }
+              catch (e) {
+                const expected = "Capability denied: 'x:y' was not granted.";
+                if (e.message !== expected) throw new Error(`Wrong message: "${e.message}"`);
+              }
+              return 'Exact error message matches — OrchestratorAgent catch relies on this';
+            }
+          },
+          {
+            name: 'authorizes(): token covers exact scope path',
+            fn() {
+              const cs = new CapabilitySet(['fs:write:/reports']);
+              if (!cs.authorizes('fs:write:/reports', 'fs:write', '/reports'))
+                throw new Error('/reports should be in scope');
+              if (!cs.authorizes('fs:write:/reports', 'fs:write', '/reports/sub/file.jsonl'))
+                throw new Error('/reports/sub/file.jsonl should be in scope');
+              return 'Exact and descendant paths both covered';
+            }
+          },
+          {
+            name: 'authorizes(): /reports does NOT cover /reports-secret (prefix attack)',
+            fn() {
+              const cs = new CapabilitySet(['fs:write:/reports']);
+              if (cs.authorizes('fs:write:/reports', 'fs:write', '/reports-secret'))
+                throw new Error('/reports-secret must be rejected — prefix attack!');
+              return '/reports-secret correctly outside /reports scope';
+            }
+          },
+          {
+            name: 'authorizes(): path with ".." segments → rejected',
+            fn() {
+              const cs = new CapabilitySet(['fs:write:/reports']);
+              if (cs.authorizes('fs:write:/reports', 'fs:write', '/reports/../secret'))
+                throw new Error('Path traversal via .. must be rejected');
+              return 'Path traversal ".." rejected in scope check';
+            }
+          },
+          {
+            name: 'authorizes(): write token cannot satisfy read check (wrong verb)',
+            fn() {
+              const cs = new CapabilitySet(['fs:write:/data']);
+              if (cs.authorizes('fs:write:/data', 'fs:read', '/data/x'))
+                throw new Error('fs:write token must not authorize fs:read');
+              return 'Write token cannot satisfy a read authorization';
+            }
+          },
+        ]
+      },
+
+      {
+        heading: 'plugin-installer.js — sanitizeManifest',
+        cases: [
+          {
+            name: 'Throws on non-object input (array)',
+            fn() {
+              try { sanitizeManifest([], MANIFEST_BASE); throw new Error('No throw'); }
+              catch (e) { if (!e.message.includes('JSON object')) throw new Error(`Wrong error: ${e.message}`); }
+              return 'Array input rejected';
+            }
+          },
+          {
+            name: 'Throws on id too long (>128 chars)',
+            fn() {
+              try { sanitizeManifest({ id: 'a'.repeat(130), name: 'X', entrypoint: 'https://x.com/' }, MANIFEST_BASE); throw new Error('No throw'); }
+              catch (e) { if (!e.message.includes('"id"')) throw new Error(`Wrong error: ${e.message}`); }
+              return '>128 char id rejected';
+            }
+          },
+          {
+            name: 'Throws on id with spaces',
+            fn() {
+              try { sanitizeManifest({ id: 'my plugin', name: 'X', entrypoint: 'https://x.com/' }, MANIFEST_BASE); throw new Error('No throw'); }
+              catch (e) { if (!e.message.includes('"id"')) throw new Error(`Wrong error: ${e.message}`); }
+              return 'id with spaces rejected';
+            }
+          },
+          {
+            name: 'Throws on missing entrypoint',
+            fn() {
+              try { sanitizeManifest({ id: 'com.test', name: 'Test' }, MANIFEST_BASE); throw new Error('No throw'); }
+              catch (e) { if (!e.message.includes('"entrypoint"')) throw new Error(`Wrong error: ${e.message}`); }
+              return 'Missing entrypoint rejected';
+            }
+          },
+          {
+            name: 'Rejects javascript: entrypoint',
+            fn() {
+              try { sanitizeManifest({ id: 'com.test', name: 'X', entrypoint: 'javascript:alert(1)' }, MANIFEST_BASE); throw new Error('No throw'); }
+              catch (e) { if (!e.message.match(/protocol|unsafe/i)) throw new Error(`Wrong error: ${e.message}`); }
+              return 'javascript: entrypoint blocked';
+            }
+          },
+          {
+            name: 'Rejects data: entrypoint',
+            fn() {
+              try { sanitizeManifest({ id: 'com.test', name: 'X', entrypoint: 'data:text/html,<h1>pwn</h1>' }, MANIFEST_BASE); throw new Error('No throw'); }
+              catch (e) { if (!e.message.match(/protocol|unsafe/i)) throw new Error(`Wrong error: ${e.message}`); }
+              return 'data: entrypoint blocked';
+            }
+          },
+          {
+            name: 'Rejects blob: entrypoint',
+            fn() {
+              try { sanitizeManifest({ id: 'com.test', name: 'X', entrypoint: 'blob:https://x.com/uuid' }, MANIFEST_BASE); throw new Error('No throw'); }
+              catch (e) { if (!e.message.match(/protocol|unsafe/i)) throw new Error(`Wrong error: ${e.message}`); }
+              return 'blob: entrypoint blocked';
+            }
+          },
+          {
+            name: 'Accepts http:// and https:// entrypoints',
+            fn() {
+              const m1 = sanitizeManifest({ id: 'com.test', name: 'X', entrypoint: 'http://localhost:5173/p.html' }, MANIFEST_BASE);
+              if (!m1.entrypoint.startsWith('http://')) throw new Error(`http:// not accepted: ${m1.entrypoint}`);
+              const m2 = sanitizeManifest({ id: 'com.test2', name: 'Y', entrypoint: 'https://example.com/p.html' }, MANIFEST_BASE);
+              if (!m2.entrypoint.startsWith('https://')) throw new Error(`https:// not accepted: ${m2.entrypoint}`);
+              return 'http:// and https:// both accepted';
+            }
+          },
+          {
+            name: 'Resolves relative entrypoint to absolute URL (supply-chain fix)',
+            fn() {
+              const m = sanitizeManifest({ id: 'com.test', name: 'X', entrypoint: 'plugin.html' }, MANIFEST_BASE);
+              if (!m.entrypoint.startsWith('https://raw.githubusercontent.com/'))
+                throw new Error(`Expected resolved absolute URL, got: ${m.entrypoint}`);
+              return `Relative entrypoint → ${m.entrypoint}`;
+            }
+          },
+          {
+            name: 'allowSameOrigin always coerced to false',
+            fn() {
+              const m = sanitizeManifest({ id: 'com.test', name: 'X', entrypoint: 'https://x.com/', sandbox: { allowSameOrigin: true } }, MANIFEST_BASE);
+              if (m.sandbox.allowSameOrigin !== false) throw new Error('allowSameOrigin must be false');
+              return 'allowSameOrigin forced to false regardless of manifest value';
+            }
+          },
+          {
+            name: 'HTML chars stripped from name (angle brackets and quotes removed)',
+            fn() {
+              const m = sanitizeManifest({ id: 'com.test', name: '\x3cscript\x3eevil\x3c/script\x3e', entrypoint: 'https://x.com/' }, MANIFEST_BASE);
+              if (m.name.includes('\x3c') || m.name.includes('\x3e'))
+                throw new Error(`HTML chars not stripped: "${m.name}"`);
+              return `Sanitized name: "${m.name}"`;
+            }
+          },
+          {
+            name: 'Throws on >32 permissions',
+            fn() {
+              try {
+                sanitizeManifest({ id: 'com.test', name: 'X', entrypoint: 'https://x.com/', permissions: Array(33).fill('fs:read:/x') }, MANIFEST_BASE);
+                throw new Error('No throw');
+              } catch (e) { if (!e.message.includes('too many')) throw new Error(`Wrong error: ${e.message}`); }
+              return '>32 permissions rejected';
+            }
+          },
+          {
+            name: 'Throws on empty-string permission token',
+            fn() {
+              try {
+                sanitizeManifest({ id: 'com.test', name: 'X', entrypoint: 'https://x.com/', permissions: [''] }, MANIFEST_BASE);
+                throw new Error('No throw');
+              } catch (e) { if (!e.message.includes('invalid permission')) throw new Error(`Wrong error: ${e.message}`); }
+              return 'Empty token rejected';
+            }
+          },
+          {
+            name: 'Rejects root-scoped fs:write:/ token',
+            fn() {
+              try {
+                sanitizeManifest({ id: 'com.test', name: 'X', entrypoint: 'https://x.com/', permissions: ['fs:write:/'] }, MANIFEST_BASE);
+                throw new Error('No throw');
+              } catch (e) { if (!e.message.includes('root-scoped')) throw new Error(`Wrong error: ${e.message}`); }
+              return 'fs:write:/ rejected — root VFS grant blocked';
+            }
+          },
+          {
+            name: 'Rejects root-scoped fs:read:/ token',
+            fn() {
+              try {
+                sanitizeManifest({ id: 'com.test', name: 'X', entrypoint: 'https://x.com/', permissions: ['fs:read:/'] }, MANIFEST_BASE);
+                throw new Error('No throw');
+              } catch (e) { if (!e.message.includes('root-scoped')) throw new Error(`Wrong error: ${e.message}`); }
+              return 'fs:read:/ rejected — root VFS grant blocked';
+            }
+          },
+        ]
+      },
+
+      {
+        heading: 'plugin-installer.js — isOriginAllowed',
+        cases: [
+          {
+            name: 'https://raw.githubusercontent.com → true',
+            fn() {
+              if (!isOriginAllowed('https://raw.githubusercontent.com/foo/bar/main/manifest.json'))
+                throw new Error('Expected true');
+              return 'raw.githubusercontent.com accepted';
+            }
+          },
+          {
+            name: 'https://cdn.jsdelivr.net → true',
+            fn() {
+              if (!isOriginAllowed('https://cdn.jsdelivr.net/npm/pkg/manifest.json'))
+                throw new Error('Expected true');
+              return 'cdn.jsdelivr.net accepted';
+            }
+          },
+          {
+            name: 'https://evil.com → false',
+            fn() {
+              if (isOriginAllowed('https://evil.com/manifest.json'))
+                throw new Error('Expected false');
+              return 'Untrusted HTTPS host rejected';
+            }
+          },
+          {
+            name: 'http://evil.com → false (HTTP protocol on untrusted host)',
+            fn() {
+              if (isOriginAllowed('http://evil.com/manifest.json'))
+                throw new Error('Expected false');
+              return 'HTTP untrusted host rejected';
+            }
+          },
+          {
+            name: 'http://localhost → true',
+            fn() {
+              if (!isOriginAllowed('http://localhost:3000/manifest.json'))
+                throw new Error('Expected true');
+              return 'localhost accepted';
+            }
+          },
+          {
+            name: 'http://127.0.0.1 → true',
+            fn() {
+              if (!isOriginAllowed('http://127.0.0.1:5173/manifest.json'))
+                throw new Error('Expected true');
+              return '127.0.0.1 accepted';
+            }
+          },
+          {
+            name: 'Malformed URL → false',
+            fn() {
+              if (isOriginAllowed('not a url at all'))
+                throw new Error('Expected false');
+              return 'Malformed URL rejected';
+            }
+          },
+        ]
+      },
+
+      {
+        heading: 'host-core.js — PluginHarness IPC security',
+        cases: [
+          {
+            name: 'Unknown token (not in permissions) → outer Permission Denied',
+            async fn() {
+              const { harness, responses } = makeHarness(['fs:write:/data']);
+              await harness.handleIpcRequest({ data: { action: IpcActions.FS_WRITE, payload: { path: '/data/x', data: 'y' }, token: 'fs:write:/other' } });
+              if (!responses[0]?.error?.includes('Permission Denied'))
+                throw new Error(`Expected denial, got: ${JSON.stringify(responses[0])}`);
+              return 'Unknown token rejected by outer CapabilitySet.has() check';
+            }
+          },
+          {
+            name: 'FS_WRITE: /reports token cannot write /reports-secret (prefix attack)',
+            async fn() {
+              const { harness, responses } = makeHarness(['fs:write:/reports']);
+              await harness.handleIpcRequest({ data: { action: IpcActions.FS_WRITE, payload: { path: '/reports-secret', data: 'x' }, token: 'fs:write:/reports' } });
+              if (!responses[0]?.error?.includes('Permission Denied'))
+                throw new Error(`Expected denial, got: ${JSON.stringify(responses[0])}`);
+              return '/reports-secret blocked — inner authorizes() rejects prefix attack';
+            }
+          },
+          {
+            name: 'FS_WRITE: path traversal /../ rejected',
+            async fn() {
+              const { harness, responses } = makeHarness(['fs:write:/reports']);
+              await harness.handleIpcRequest({ data: { action: IpcActions.FS_WRITE, payload: { path: '/reports/../secret', data: 'x' }, token: 'fs:write:/reports' } });
+              if (!responses[0]?.error?.includes('Permission Denied'))
+                throw new Error(`Expected denial, got: ${JSON.stringify(responses[0])}`);
+              return 'Path traversal ".." rejected at IPC layer';
+            }
+          },
+          {
+            name: 'FS_WRITE: /reports/sub/file.jsonl accepted with /reports token',
+            async fn() {
+              const { harness, responses } = makeHarness(['fs:write:/reports']);
+              await harness.handleIpcRequest({ data: { action: IpcActions.FS_WRITE, payload: { path: '/reports/sub/file.jsonl', data: '{"ok":1}' }, token: 'fs:write:/reports' } });
+              if (!responses[0]?.success)
+                throw new Error(`Expected success, got: ${JSON.stringify(responses[0])}`);
+              return 'Descendant path /reports/sub/file.jsonl accepted';
+            }
+          },
+          {
+            name: 'FS_READ: write token cannot satisfy read action (wrong verb)',
+            async fn() {
+              const { harness, responses } = makeHarness(['fs:write:/data', 'fs:read:/data']);
+              // Present the write token for a read action — must be denied by inner check
+              await harness.handleIpcRequest({ data: { action: IpcActions.FS_READ, payload: { path: '/data/x' }, token: 'fs:write:/data' } });
+              if (!responses[0]?.error?.includes('Permission Denied'))
+                throw new Error(`Expected denial, got: ${JSON.stringify(responses[0])}`);
+              return 'fs:write token cannot authorize fs:read action';
+            }
+          },
+          {
+            name: 'SYSTEM_NOTIFY: wrong-but-granted token (kb-mcp:read) → exact-token denial',
+            async fn() {
+              const { harness, responses } = makeHarness(['system:notify', 'kb-mcp:read']);
+              await harness.handleIpcRequest({ data: { action: IpcActions.SYSTEM_NOTIFY, payload: { message: 'Hello' }, token: 'kb-mcp:read' } });
+              if (!responses[0]?.error?.includes('Permission Denied'))
+                throw new Error(`Expected denial, got: ${JSON.stringify(responses[0])}`);
+              return 'kb-mcp:read token cannot trigger SYSTEM_NOTIFY (inner exact-verb check)';
+            }
+          },
+          {
+            name: 'SYSTEM_NOTIFY: 4th notification in window → rate limit error',
+            async fn() {
+              const { harness, responses } = makeHarness(['system:notify']);
+              for (let i = 0; i < 3; i++) {
+                await harness.handleIpcRequest({ data: { action: IpcActions.SYSTEM_NOTIFY, payload: { message: `Msg ${i}` }, token: 'system:notify' } });
+              }
+              await harness.handleIpcRequest({ data: { action: IpcActions.SYSTEM_NOTIFY, payload: { message: 'Overflow' }, token: 'system:notify' } });
+              const last = responses[responses.length - 1];
+              if (!last?.error?.includes('rate limit'))
+                throw new Error(`Expected rate limit error, got: ${JSON.stringify(last)}`);
+              return '4th notification in 60 s window rejected by rate limiter';
+            }
+          },
+          {
+            name: 'SYSTEM_NOTIFY: rate counter resets after window expires',
+            async fn() {
+              const { harness, responses } = makeHarness(['system:notify']);
+              // Fill the window
+              for (let i = 0; i < 3; i++) {
+                await harness.handleIpcRequest({ data: { action: IpcActions.SYSTEM_NOTIFY, payload: { message: `Msg ${i}` }, token: 'system:notify' } });
+              }
+              // Force window expiry
+              harness._notifyWindowEnd = Date.now() - 1;
+              await harness.handleIpcRequest({ data: { action: IpcActions.SYSTEM_NOTIFY, payload: { message: 'After reset' }, token: 'system:notify' } });
+              const last = responses[responses.length - 1];
+              if (!last?.success)
+                throw new Error(`Expected success after reset, got: ${JSON.stringify(last)}`);
+              return 'Rate-limit window reset allows 4th notification in new window';
+            }
+          },
+        ]
+      },
+
+      {
+        heading: 'agent-core.js — SystemEventBus',
+        cases: [
+          {
+            name: 'on/emit: handler fires with correct detail',
+            fn() {
+              const bus = new SystemEventBus();
+              let received = null;
+              bus.on(SystemEvents.APP_LAUNCH, (d) => { received = d; });
+              bus.emit(SystemEvents.APP_LAUNCH, { app: 'terminal' });
+              if (!received || received.app !== 'terminal')
+                throw new Error(`Expected {app:'terminal'}, got: ${JSON.stringify(received)}`);
+              return 'Handler received correct detail';
+            }
+          },
+          {
+            name: 'Emitted detail is frozen — mutation is silently ignored',
+            fn() {
+              const bus = new SystemEventBus();
+              let received = null;
+              bus.on(SystemEvents.APP_LAUNCH, (d) => { received = d; });
+              bus.emit(SystemEvents.APP_LAUNCH, { app: 'terminal' });
+              try { received.app = 'hacked'; } catch (_) {}
+              if (received.app !== 'terminal')
+                throw new Error('Frozen detail was successfully mutated — security breach');
+              return 'Detail is frozen; mutation has no effect';
+            }
+          },
+          {
+            name: 'Unsubscribe function removes handler',
+            fn() {
+              const bus = new SystemEventBus();
+              let count = 0;
+              const unsub = bus.on(SystemEvents.APP_LAUNCH, () => count++);
+              bus.emit(SystemEvents.APP_LAUNCH, {});
+              unsub();
+              bus.emit(SystemEvents.APP_LAUNCH, {});
+              if (count !== 1) throw new Error(`Expected 1 call, got ${count}`);
+              return 'Unsubscribe correctly stops further invocations';
+            }
+          },
+        ]
+      },
+
+      {
+        heading: 'agent-core.js — OrchestratorAgent',
+        cases: [
+          {
+            name: 'start(): throws when agent:orchestrate not granted',
+            fn() {
+              const bus = new SystemEventBus();
+              const agent = new OrchestratorAgent({ bus, storage: mockStorage(), guard: new CapabilitySet([]) });
+              try { agent.start(); throw new Error('No throw'); }
+              catch (e) {
+                if (!e.message.includes('agent:orchestrate'))
+                  throw new Error(`Wrong error: ${e.message}`);
+              }
+              return 'start() throws capability denial for agent:orchestrate';
+            }
+          },
+          {
+            name: 'stop(): events emitted after stop do not trigger storage writes',
+            async fn() {
+              const bus = new SystemEventBus();
+              let writeCount = 0;
+              const ms = { ...mockStorage(), queueLine: () => writeCount++ };
+              const agent = new OrchestratorAgent({
+                bus, storage: ms,
+                guard: new CapabilitySet(['agent:orchestrate', 'fs:write:/reports'])
+              });
+              agent.start();
+              bus.emit(SystemEvents.APP_LAUNCH, { title: 'pre-stop' });
+              agent.stop();
+              bus.emit(SystemEvents.APP_LAUNCH, { title: 'post-stop' });
+              await new Promise(r => setTimeout(r, 20));
+              if (writeCount !== 1)
+                throw new Error(`Expected 1 write (before stop), got ${writeCount}`);
+              return `stop() prevents post-stop writes — writeCount = ${writeCount}`;
+            }
+          },
+        ]
+      },
+
+      {
+        heading: 'contracts.js — IpcActions / SystemEvents constants',
+        cases: [
+          {
+            name: 'IpcActions and SystemEvents are frozen Objects.freeze() objects',
+            fn() {
+              if (!Object.isFrozen(IpcActions)) throw new Error('IpcActions is not frozen');
+              if (!Object.isFrozen(SystemEvents)) throw new Error('SystemEvents is not frozen');
+              return 'Both objects are frozen';
+            }
+          },
+          {
+            name: 'IpcActions has correct string values (SSOT drift check)',
+            fn() {
+              const expected = { FS_WRITE: 'fs:write', FS_READ: 'fs:read', SYSTEM_NOTIFY: 'system:notify', KB_READ: 'kb:read', KB_WRITE: 'kb:write', INIT_PORT: 'INIT_PORT' };
+              for (const [k, v] of Object.entries(expected)) {
+                if (IpcActions[k] !== v) throw new Error(`IpcActions.${k} = "${IpcActions[k]}", expected "${v}"`);
+              }
+              return 'All IpcActions values match expected strings';
+            }
+          },
+          {
+            name: 'SystemEvents has correct string values (SSOT drift check)',
+            fn() {
+              const expected = { APP_LAUNCH: 'app:launch', FILE_OPEN: 'file:open', COMMAND_SEND: 'command:send' };
+              for (const [k, v] of Object.entries(expected)) {
+                if (SystemEvents[k] !== v) throw new Error(`SystemEvents.${k} = "${SystemEvents[k]}", expected "${v}"`);
+              }
+              return 'All SystemEvents values match expected strings';
+            }
+          },
+          {
+            name: 'Mutation of frozen IpcActions is silently ignored',
+            fn() {
+              try { IpcActions.FS_WRITE = 'hacked'; } catch (_) {}
+              if (IpcActions.FS_WRITE !== 'fs:write')
+                throw new Error('IpcActions.FS_WRITE was mutated — freeze broken');
+              return 'IpcActions.FS_WRITE mutation rejected by Object.freeze';
+            }
+          },
+        ]
+      },
+    ];
+
+    // ─────────────────────────────────────────────────────────
+    // Runner
+    // ─────────────────────────────────────────────────────────
+
+    async function runTests() {
+      const root = document.getElementById('results');
+      root.innerHTML = '';
+      let totalPass = 0, totalFail = 0;
+
+      for (const group of GROUPS) {
+        const heading = document.createElement('div');
+        heading.className = 'section-heading';
+        heading.textContent = group.heading;
+        root.appendChild(heading);
+
+        for (const tc of group.cases) {
+          const caseDiv = document.createElement('div');
+          caseDiv.className = 'test-case';
+
+          const titleEl = document.createElement('h3');
+          titleEl.textContent = tc.name;
+          caseDiv.appendChild(titleEl);
+
+          const outPre = document.createElement('pre');
+          caseDiv.appendChild(outPre);
+
+          try {
+            const msg = await tc.fn();
+            caseDiv.classList.add('pass');
+            const label = document.createElement('span');
+            label.className = 'status pass';
+            label.textContent = '[PASS]';
+            outPre.appendChild(label);
+            outPre.appendChild(document.createTextNode(' ' + msg));
+            totalPass++;
+          } catch (err) {
+            caseDiv.classList.add('fail');
+            const label = document.createElement('span');
+            label.className = 'status fail';
+            label.textContent = '[FAIL]';
+            outPre.appendChild(label);
+            outPre.appendChild(document.createTextNode(' ' + err.message));
+            totalFail++;
+          }
+
+          root.appendChild(caseDiv);
+        }
+      }
+
+      const summary = document.createElement('div');
+      summary.id = 'summary';
+      summary.className = totalFail === 0 ? 'all-pass' : 'has-fail';
+      summary.textContent = `${totalPass} passed, ${totalFail} failed  (${totalPass + totalFail} total)`;
+      root.prepend(summary);
+    }
+
+    runTests();
+  </script>
+</body>
+</html>

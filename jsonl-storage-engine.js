@@ -17,9 +17,6 @@ class CompressedStorageEngine {
 
       request.onblocked = () => {
         console.warn(`[VFS] Database '${this.dbName}' connection blocked by another active tab!`);
-        if (window.parent?.vortexKernel?.bus) {
-          window.parent.vortexKernel.bus.emit('vfs:blocked', { dbName: this.dbName });
-        }
       };
 
       request.onupgradeneeded = (event) => {
@@ -36,9 +33,6 @@ class CompressedStorageEngine {
           console.warn(`[VFS] Database '${this.dbName}' is upgrading in another tab. Closing connection immediately.`);
           this.db.close();
           this.db = null;
-          if (window.parent?.vortexKernel?.bus) {
-            window.parent.vortexKernel.bus.emit('vfs:offline', { dbName: this.dbName });
-          }
         };
 
         resolve();
@@ -56,7 +50,10 @@ class CompressedStorageEngine {
   _enqueue(filePath, task) {
     const prev = this.writeChains.get(filePath) || Promise.resolve();
     const result = prev.then(() => task(), () => task());
-    this.writeChains.set(filePath, result.then(() => {}, () => {}));
+    const chain = result.then(() => {}, () => {});
+    this.writeChains.set(filePath, chain);
+    // Prune the Map entry once this chain tail settles and no newer write has replaced it.
+    chain.then(() => { if (this.writeChains.get(filePath) === chain) this.writeChains.delete(filePath); });
     return result;
   }
 
@@ -117,6 +114,16 @@ class CompressedStorageEngine {
     this.pendingLines.set(filePath, []);
     const batch = lines.join('');
     return this._enqueue(filePath, () => this._commitAppend(filePath, batch));
+  }
+
+  // Flush all dirty files and close the IndexedDB connection. Call on teardown
+  // to guarantee pending lines are committed before the engine is discarded.
+  async close() {
+    await this.flushAll();
+    if (this.db) {
+      this.db.close();
+      this.db = null;
+    }
   }
 
   // Durability barrier: flush every dirty file. Wire to `beforeunload` so an

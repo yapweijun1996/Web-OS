@@ -32,6 +32,25 @@ function getCorsProxy() {
   }
 }
 
+// Sliding-window rate limit for proxy calls: at most MAX_PROXY_CALLS fetches
+// per PROXY_WINDOW_MS. Prevents the configured proxy from being hammered by a
+// tight install loop (accidental or intentional).
+const MAX_PROXY_CALLS = 5;
+const PROXY_WINDOW_MS = 60_000;
+const _proxyCallTimestamps = [];
+
+function _checkProxyRateLimit() {
+  const now = Date.now();
+  while (_proxyCallTimestamps.length && _proxyCallTimestamps[0] <= now - PROXY_WINDOW_MS) {
+    _proxyCallTimestamps.shift();
+  }
+  if (_proxyCallTimestamps.length >= MAX_PROXY_CALLS) {
+    const retryAfterSec = Math.ceil((PROXY_WINDOW_MS - (now - _proxyCallTimestamps[0])) / 1000);
+    throw new Error(`CORS proxy rate limit exceeded (${MAX_PROXY_CALLS} calls/${PROXY_WINDOW_MS / 1000}s). Retry in ${retryAfterSec}s.`);
+  }
+  _proxyCallTimestamps.push(now);
+}
+
 const ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{1,127}$/;
 const VERSION_PATTERN = /^[0-9]+(\.[0-9]+){0,3}([-+][a-zA-Z0-9.]+)?$/;
 // The namespace segment allows hyphens so capability namespaces like
@@ -72,6 +91,7 @@ async function fetchManifestText(url) {
       );
     }
     // Proxy fallback — only reached when a proxy URL is explicitly configured.
+    _checkProxyRateLimit();
     const proxied = await fetch(proxy + encodeURIComponent(url));
     if (!proxied.ok) {
       throw new Error(`Manifest fetch failed via configured proxy (HTTP ${proxied.status}).`);
