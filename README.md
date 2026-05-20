@@ -16,28 +16,45 @@ Vortex OS is an ultra-lightweight, high-performance web desktop environment buil
 ## 📂 Project Structure
 
 ```text
-├── .github/
-│   └── workflows/
-│       └── deploy.yml          # Automated GitHub Pages CI/CD workflow
-├── docs/
-│   ├── alpine-cold-start.md    # Wasm Alpine Linux optimization guide
-│   ├── kb-mcp-integration.md   # KB-MCP memory integration guide
-│   ├── plugin-system.md        # Technical guide for building secure plugins
-│   ├── resource-monitor.md     # Resource monitor (process manager) design spec
-│   └── storage-engine.md       # High-performance IndexedDB + JSONL.gz manual
-├── index.html                  # Main OS Desktop GUI and Window Manager
-├── calculator.html             # High-performance native-feel Calculator app
-├── notes.html                  # Debounced real-time auto-saving Notes app
-├── terminal.html               # Multi-terminal interactive rendering app
-├── test.html                   # Browser-based automated test runner for VFS
-├── host-core.js                # Secure plugin harness & capability tokens validator
-├── plugin.js                   # Example sandboxed client-side plugin
-├── jsonl-storage-engine.js     # Gzipped append-only IndexedDB storage implementation
-├── v86-bridge.js               # WebAssembly Linux serial standard IO bridge
-├── package.json                # Vite dev server and build automation config
-├── DESIGN.md                   # In-depth architectural breakdown of Vortex OS
-└── README.md                   # Getting Started Guide (This file)
+├── .github/workflows/deploy.yml  # GitHub Pages CI/CD workflow
+├── public/v86/                   # v86 WebAssembly emulator assets
+├── docs/                         # Subsystem design specs — see docs/README.md
+├── index.html                    # OS desktop: window manager, menu bar, dock
+├── window-manager.js             # Window Management System (WMS)
+├── host-core.js                  # Plugin harness & capability-token IPC validator
+├── capability.js                 # Capability-token model (allow-list, grammar, checks)
+├── contracts.js                  # Shared string vocabularies (events, channels)
+├── plugin-installer.js           # Reverse proxy for installing CORS-protected plugins
+├── plugin.js                     # Example sandboxed plugin
+├── manifest.json                 # Example plugin manifest
+├── agent-core.js                 # Event-hook interceptors & multi-agent orchestrator
+├── kb-proxy.js                   # Host-side proxy to the KB-MCP knowledge server
+├── jsonl-storage-engine.js       # Gzipped append-only IndexedDB storage engine
+├── v86-bridge.js                 # WebAssembly Linux serial stdio bridge
+├── v86-worker.js                 # Web Worker hosting the v86 virtual machine
+├── calculator.html               # Built-in app: Calculator
+├── dashboard.html                # Built-in app: Dashboard
+├── files.html                    # Built-in app: Files
+├── monitor.html                  # Built-in app: Activity Monitor
+├── notes.html                    # Built-in app: Notes (auto-saving)
+├── terminal.html                 # Built-in app: Terminal
+├── test.html                     # Automated browser test runner for the VFS
+├── vite.config.js                # Vite dev server / build config
+├── package.json                  # npm + Vite configuration
+├── favicon.svg                   # App icon
+├── DESIGN.md                     # Architecture deep-dive
+├── AGENTS.md                     # Contribution rules for AI agents
+└── README.md                     # Getting Started guide (this file)
 ```
+
+---
+
+## 📖 Documentation
+
+- [`DESIGN.md`](DESIGN.md) — in-depth architectural breakdown of Vortex OS.
+- [`docs/`](docs/README.md) — per-subsystem design specifications and developer
+  guides (plugins, storage, agents, terminal, desktop UI). The
+  [docs index](docs/README.md) lists all of them by topic.
 
 ---
 
