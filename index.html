@@ -74,11 +74,57 @@
       justify-content: flex-end;
     }
     .menu-status svg, .menu-logo svg { display: block; }
+    .menu-item.menu-open { background: rgba(255, 255, 255, 0.18); }
+
+    /* Menu-bar dropdown */
+    .menu-dropdown {
+      position: absolute;
+      top: 28px;
+      min-width: 200px;
+      padding: 4px;
+      background: rgba(40, 40, 42, 0.8);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 6px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+      z-index: 10001;
+    }
+
+    .menu-dropdown-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 28px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      white-space: nowrap;
+      cursor: default;
+    }
+
+    .menu-dropdown-item:hover { background: var(--accent); color: #fff; }
+
+    .menu-dropdown-item.disabled {
+      color: var(--text-dim);
+      pointer-events: none;
+    }
+
+    .menu-dropdown-shortcut { color: var(--text-dim); }
+    .menu-dropdown-item:hover .menu-dropdown-shortcut { color: rgba(255, 255, 255, 0.75); }
+
+    .menu-dropdown-sep {
+      height: 1px;
+      margin: 4px 8px;
+      background: rgba(255, 255, 255, 0.12);
+    }
 
     /* Desktop Wallpaper & Icons Grid (icons fill from the top-right, macOS-style) */
     #desktop {
       flex: 1;
       position: relative;
+      /* Confine every window's z-index to this stacking context, so the
+         ever-growing window counter can never paint over the menu bar or
+         Dock (both sit at z-index 100 in the body's stacking context). */
+      isolation: isolate;
       padding: 18px;
       display: grid;
       grid-auto-flow: column;
@@ -328,15 +374,15 @@
   <!-- Top Menu Bar -->
   <div id="menubar">
     <div class="menu-section">
-      <span class="menu-item menu-logo" title="Vortex OS">
+      <span class="menu-item menu-logo" data-menu="apple" title="Vortex OS">
         <svg viewBox="0 0 384 512" width="13" height="13"><path fill="currentColor" d="M318.7 268c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C72.4 141.2 18 173.3 18 238.7c0 19.3 3.5 39.3 10.6 59.9 9.4 27.1 43.4 93.5 78.9 92.4 18.5-.4 31.6-13.1 55.7-13.1 23.4 0 35.5 13.1 56.1 13.1 35.8-.5 66.6-60.9 75.5-88.1-47.8-22.5-45.1-66-45.1-67.8zm-56.5-126.6c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>
       </span>
       <span class="menu-item menu-app">Vortex OS</span>
-      <span class="menu-item">File</span>
-      <span class="menu-item">Edit</span>
-      <span class="menu-item">View</span>
-      <span class="menu-item">Window</span>
-      <span class="menu-item">Help</span>
+      <span class="menu-item" data-menu="File">File</span>
+      <span class="menu-item" data-menu="Edit">Edit</span>
+      <span class="menu-item" data-menu="View">View</span>
+      <span class="menu-item" data-menu="Window">Window</span>
+      <span class="menu-item" data-menu="Help">Help</span>
     </div>
     <div class="menu-section">
       <span class="menu-item menu-status" title="Control Center">
@@ -763,6 +809,118 @@
       requestAnimationFrame(fpsLoop);
     }
     requestAnimationFrame(fpsLoop);
+
+    // ---- Menu-bar dropdown system ----
+    // Each menu is a list of items; an item either runs an action or is a
+    // separator. Window actions reuse the existing traffic-light controls so
+    // behavior stays identical to clicking those buttons directly.
+    function focusedWindow() {
+      return document.querySelector('.window.focused');
+    }
+
+    function clickWindowControl(selector) {
+      focusedWindow()?.querySelector(selector)?.click();
+    }
+
+    const MENUS = {
+      apple: [
+        { label: 'About Vortex OS', action: () => alert('Vortex OS\nA vanilla web operating system.\nVersion 1.0.0') }
+      ],
+      File: [
+        { label: 'New Plugin App…', action: () => { modal.style.display = 'block'; manifestInput.value = window.location.origin + '/manifest.json'; } },
+        { separator: true },
+        { label: 'Close Window', shortcut: '⌘W', needsWindow: true, action: () => clickWindowControl('.win-close') }
+      ],
+      Edit: [
+        { label: 'Cut', shortcut: '⌘X', action: () => document.execCommand('cut') },
+        { label: 'Copy', shortcut: '⌘C', action: () => document.execCommand('copy') },
+        { separator: true },
+        { label: 'Select All', shortcut: '⌘A', action: () => document.execCommand('selectAll') }
+      ],
+      View: [
+        { label: 'Reload Window', shortcut: '⌘R', needsWindow: true, action: () => { const f = focusedWindow()?.querySelector('iframe'); if (f) f.src = f.src; } },
+        { label: 'Enter Full Screen', needsWindow: true, action: () => { const w = focusedWindow(); if (w) toggleMaximize(w); } }
+      ],
+      Window: [
+        { label: 'Minimize', shortcut: '⌘M', needsWindow: true, action: () => { const w = focusedWindow(); if (w) minimizeWindow(w); } },
+        { label: 'Zoom', needsWindow: true, action: () => { const w = focusedWindow(); if (w) toggleMaximize(w); } },
+        { separator: true },
+        { label: 'Close', shortcut: '⌘W', needsWindow: true, action: () => clickWindowControl('.win-close') }
+      ],
+      Help: [
+        { label: 'Vortex OS Help', action: () => alert('Vortex OS Help\n\n• Click a desktop icon or Dock app to open a window.\n• Traffic lights: red closes, yellow minimizes to the Dock, green zooms.\n• Drag a window by its title bar.\n• Use the + button in the Dock to install a sandboxed plugin.') }
+      ]
+    };
+
+    let openMenuTrigger = null;
+    let menuDropdownEl = null;
+
+    function closeMenu() {
+      if (menuDropdownEl) { menuDropdownEl.remove(); menuDropdownEl = null; }
+      if (openMenuTrigger) { openMenuTrigger.classList.remove('menu-open'); openMenuTrigger = null; }
+    }
+
+    function openMenu(trigger) {
+      const items = MENUS[trigger.dataset.menu];
+      if (!items) return;
+      closeMenu();
+      openMenuTrigger = trigger;
+      trigger.classList.add('menu-open');
+
+      const dd = document.createElement('div');
+      dd.className = 'menu-dropdown';
+      dd.style.left = trigger.offsetLeft + 'px';
+      dd.addEventListener('click', (e) => e.stopPropagation());
+
+      items.forEach(item => {
+        if (item.separator) {
+          const sep = document.createElement('div');
+          sep.className = 'menu-dropdown-sep';
+          dd.appendChild(sep);
+          return;
+        }
+        const disabled = item.needsWindow && !focusedWindow();
+        const row = document.createElement('div');
+        row.className = 'menu-dropdown-item' + (disabled ? ' disabled' : '');
+
+        const label = document.createElement('span');
+        label.textContent = item.label;
+        row.appendChild(label);
+
+        if (item.shortcut) {
+          const sc = document.createElement('span');
+          sc.className = 'menu-dropdown-shortcut';
+          sc.textContent = item.shortcut;
+          row.appendChild(sc);
+        }
+
+        if (!disabled) {
+          row.addEventListener('click', () => {
+            closeMenu();
+            item.action();
+          });
+        }
+        dd.appendChild(row);
+      });
+
+      document.getElementById('menubar').appendChild(dd);
+      menuDropdownEl = dd;
+    }
+
+    document.querySelectorAll('#menubar [data-menu]').forEach(trigger => {
+      trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (openMenuTrigger === trigger) closeMenu();
+        else openMenu(trigger);
+      });
+      // While a menu is already open, hovering another menu switches to it.
+      trigger.addEventListener('mouseenter', () => {
+        if (openMenuTrigger && openMenuTrigger !== trigger) openMenu(trigger);
+      });
+    });
+
+    document.addEventListener('click', closeMenu);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
 
     // Initial render call on startup
     renderInstalledApps();
