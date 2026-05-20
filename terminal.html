@@ -67,7 +67,7 @@
           netDevice: {
             type: 'ne2k',
             relay_url: 'fetch',
-            dns_method: 'doh'
+            dns_method: 'static'
           },
           cmdline: 'console=ttyS0 earlyprintk=serial,ttyS0 root=/dev/ram0 rw init=/init',
           memorySize: 192 * 1024 * 1024
@@ -75,7 +75,7 @@
         readyPatterns: ['[Vortex OS] Alpine Linux initramfs ready.', '/ #', '~ #'],
         readyMessage: [
           '[Vortex OS] Alpine shell ready. bash, curl, CA certificates, and apk are available.',
-          '[Vortex OS] v86 fetch relay handles DHCP/DNS/HTTP. Direct HTTPS egress needs a WISP/full TCP relay.'
+          '[Vortex OS] v86 fetch relay handles DHCP/DNS/HTTP. The same-origin APK mirror is configured from the current dev port.'
         ]
       }
     };
@@ -426,7 +426,13 @@
         term.writeln('  linux             Boot the default Buildroot demo profile.');
         term.writeln('  linux buildroot   Boot the Buildroot demo profile.');
         term.writeln('  linux alpine      Boot the Alpine package-manager profile.');
+        term.writeln('  linux alpine wisp://host:port  Boot Alpine through a WISP full TCP relay.');
         term.writeln('  linux help        Show this VM help.');
+      }
+
+      function localApkMirrorRepository() {
+        const port = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
+        return `http://${port}.external/v86/apk/main`;
       }
 
       async function resourceAvailable(url) {
@@ -578,7 +584,7 @@
 
           case 'linux':
           case 'vm':
-            await startLinuxMode(args[0] || 'buildroot');
+            await startLinuxMode(args[0] || 'buildroot', args.slice(1));
             break;
 
           case 'jslinux':
@@ -596,7 +602,23 @@
         }
       }
 
-      async function startLinuxMode(profileName = 'buildroot') {
+      function linuxConfigFor(profile, options = []) {
+        const config = {
+          ...profile.config,
+          netDevice: profile.config.netDevice ? { ...profile.config.netDevice } : null
+        };
+        const relayUrl = options.find((arg) => arg.startsWith('wisp://') || arg.startsWith('wisps://'));
+        if (relayUrl) {
+          config.networkRelayUrl = relayUrl;
+          config.netDevice = {
+            ...(config.netDevice || { type: 'ne2k' }),
+            relay_url: relayUrl
+          };
+        }
+        return config;
+      }
+
+      async function startLinuxMode(profileName = 'buildroot', options = []) {
         if (mode === 'linux') return;
         if (profileName === 'help' || profileName === '--help' || profileName === '-h') {
           writeLinuxHelp();
@@ -635,8 +657,10 @@
         const channel = new MessageChannel();
         linuxPort = channel.port2;
         let linuxReadyHintShown = false;
+        let alpineMirrorConfigured = false;
+        let linuxOutputBuffer = '';
         bridge = new V86LinuxBridge({
-          ...profile.config,
+          ...linuxConfigFor(profile, options),
           onStatusChange(status) {
             if (status === 'error') {
               mode = 'shell';
@@ -650,11 +674,31 @@
         bridge.registerTerminalPort('terminal-main', channel.port1);
         linuxPort.onmessage = (event) => {
           if (event.data && event.data.action === 'STDOUT') {
-            term.write(event.data.data);
-            if (!linuxReadyHintShown && profile.readyPatterns.some((pattern) => event.data.data.includes(pattern))) {
+            const output = event.data.data;
+            term.write(output);
+            linuxOutputBuffer = (linuxOutputBuffer + output).slice(-1000);
+            if (profileName === 'alpine' && !alpineMirrorConfigured && linuxOutputBuffer.includes('/ #')) {
+              alpineMirrorConfigured = true;
+              const repository = localApkMirrorRepository();
+              linuxPort.postMessage({
+                action: 'STDIN',
+                data: `printf '%s\\n' '${repository}' > /etc/apk/repositories\r`
+              });
+            }
+            if (!linuxReadyHintShown && profile.readyPatterns.some((pattern) => linuxOutputBuffer.includes(pattern))) {
               linuxReadyHintShown = true;
               term.writeln('');
               profile.readyMessage.forEach((message) => term.writeln(message));
+              if (profileName === 'alpine' && !alpineMirrorConfigured) {
+                alpineMirrorConfigured = true;
+                const repository = localApkMirrorRepository();
+                window.setTimeout(() => {
+                  linuxPort?.postMessage({
+                    action: 'STDIN',
+                    data: `printf '%s\\n' '${repository}' > /etc/apk/repositories\r`
+                  });
+                }, 500);
+              }
             }
           }
         };

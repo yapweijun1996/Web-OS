@@ -141,7 +141,7 @@ Build or refresh the asset with:
 Current generated artifact:
 
 - Size: 6.6 MiB
-- SHA-256: `04a18c2267c09eda504a3a59e1982f275c0c490c8037b30b6b05788877e60bdf`
+- SHA-256: `74bde06bb99942c2f03d6121e3629dd2d74abe2ef25f41f4bdb0117217f05ca4`
 
 The build script preinstalls:
 
@@ -159,13 +159,37 @@ network_relay_url: 'fetch'
 
 That relay provides guest DHCP/DNS and browser-backed HTTP fetches. Direct guest HTTPS/TCP egress still requires a WISP/full TCP relay, because the fetch relay does not tunnel arbitrary port 443 connections.
 
+The build script also creates a same-origin APK mirror under:
+
+```text
+public/v86/apk/main/x86/
+```
+
+`terminal.html` rewrites `/etc/apk/repositories` after Alpine reaches its shell prompt so the guest points to the current browser dev port:
+
+```text
+http://<current-port>.external/v86/apk/main
+```
+
+Vite serves that mirror through a raw-file middleware so `APKINDEX.tar.gz` and `.apk` files are not browser-decompressed before v86 relays them to the guest.
+
 Inside the VM, bring up networking with:
 
 ```sh
 udhcpc -i eth0
+apk update
 ```
 
-If `linux alpine` reports a missing initramfs asset, run the build script above. If mirror-backed `apk update` cannot reach external repositories, the VM booted correctly but needs either a CORS-compatible/same-origin APK mirror or a WISP/full TCP relay.
+For a full TCP relay, boot Alpine with a WISP endpoint:
+
+```text
+linux alpine wisp://host:port
+linux alpine wisps://host:port
+```
+
+The client-side v86 wiring accepts those relay URLs. Operating the WISP server itself is tracked separately because this repo currently does not include a relay daemon.
+
+If `linux alpine` reports a missing initramfs asset, run the build script above.
 
 ## Verification
 
@@ -189,3 +213,4 @@ Verified on 2026-05-21:
 - Chrome DevTools MCP confirmed `bash --version` returns GNU bash `5.3.3`.
 - Chrome DevTools MCP confirmed `curl --version` returns curl `8.19.0` with `https` protocol support and OpenSSL `3.5.6`.
 - Chrome DevTools MCP confirmed v86 fetch relay DHCP assigns `192.168.86.100` to `eth0`.
+- Chrome DevTools MCP confirmed the dynamic same-origin mirror rewrites `/etc/apk/repositories` to the active dev port and `apk update` returns `OK: 5869 distinct packages available`.

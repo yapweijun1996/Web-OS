@@ -8,10 +8,12 @@ ALPINE_REPOSITORY_URL="${ALPINE_REPOSITORY_URL:-https://dl-cdn.alpinelinux.org/a
 ALPINE_TARBALL="alpine-minirootfs-${ALPINE_VERSION}-${ALPINE_ARCH}.tar.gz"
 ALPINE_URL="${ALPINE_URL:-${ALPINE_BASE_URL}/${ALPINE_TARBALL}}"
 PREINSTALL_PACKAGES="${PREINSTALL_PACKAGES:-bash curl ca-certificates}"
+APK_MIRROR_HOST="${APK_MIRROR_HOST:-5173.external}"
 REPO_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 OUT_DIR="${OUT_DIR:-${REPO_ROOT}/public/v86}"
 OUT_FILE="${OUT_FILE:-${OUT_DIR}/alpine-initramfs.cpio.gz}"
 CHECKSUM_FILE="${CHECKSUM_FILE:-${OUT_FILE}.sha256}"
+APK_MIRROR_DIR="${APK_MIRROR_DIR:-${OUT_DIR}/apk/main/${ALPINE_ARCH}}"
 WORK_DIR="${WORK_DIR:-}"
 
 if ! command -v curl >/dev/null 2>&1; then
@@ -65,10 +67,11 @@ if [ -n "$PREINSTALL_PACKAGES" ]; then
   APK_INDEX="${WORK_DIR}/APKINDEX"
   APK_DIR="${WORK_DIR}/apks"
   APK_LIST="${WORK_DIR}/apk-list.tsv"
-  mkdir -p "$APK_DIR"
+  mkdir -p "$APK_DIR" "$APK_MIRROR_DIR"
 
   echo "Resolving Alpine packages: ${PREINSTALL_PACKAGES}"
   curl -fL "${ALPINE_REPOSITORY_URL}/APKINDEX.tar.gz" -o "$APK_INDEX_TARBALL"
+  cp "$APK_INDEX_TARBALL" "${APK_MIRROR_DIR}/APKINDEX.tar.gz"
   tar -xzf "$APK_INDEX_TARBALL" -C "$WORK_DIR" APKINDEX
   # shellcheck disable=SC2086
   node "$REPO_ROOT/scripts/resolve-alpine-apks.mjs" "$APK_INDEX" $PREINSTALL_PACKAGES > "$APK_LIST"
@@ -77,6 +80,7 @@ if [ -n "$PREINSTALL_PACKAGES" ]; then
     [ -n "$package_name" ] || continue
     echo "Installing ${package_name}-${package_version} (${package_size} bytes)"
     curl -fL "${ALPINE_REPOSITORY_URL}/${apk_file}" -o "${APK_DIR}/${apk_file}"
+    cp "${APK_DIR}/${apk_file}" "${APK_MIRROR_DIR}/${apk_file}"
     tar -xzf "${APK_DIR}/${apk_file}" -C "$ROOTFS_DIR" \
       --exclude='.SIGN*' \
       --exclude='.PKGINFO' \
@@ -84,6 +88,9 @@ if [ -n "$PREINSTALL_PACKAGES" ]; then
       --exclude='.pre-*'
   done < "$APK_LIST"
 fi
+
+mkdir -p "$ROOTFS_DIR/etc/apk"
+printf 'http://%s/v86/apk/main\n' "$APK_MIRROR_HOST" > "$ROOTFS_DIR/etc/apk/repositories"
 
 mkdir -p "$ROOTFS_DIR/dev" "$ROOTFS_DIR/proc" "$ROOTFS_DIR/sys" "$ROOTFS_DIR/run" "$ROOTFS_DIR/tmp" "$ROOTFS_DIR/root"
 chmod 1777 "$ROOTFS_DIR/tmp"

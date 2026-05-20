@@ -263,12 +263,29 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
 * **Summary**: Add WISP Relay or Same-Origin APK Mirror for Live Alpine Installs
 * **Issue Type**: Story
 * **Priority**: Medium
-* **Status**: To Do
-* **Description**: The Alpine initramfs now includes bash, curl, CA certificates, apk, and v86 fetch-relay DHCP. Live `apk update` against external mirrors and direct guest `curl https://...` still need a CORS-compatible package mirror or WISP/full TCP relay because fetch relay does not tunnel arbitrary port 443 traffic.
+* **Status**: Done
+* **Description**: The Alpine initramfs now includes bash, curl, CA certificates, apk, and v86 fetch-relay DHCP. Live `apk update` works through a same-origin APK mirror. Direct guest `curl https://...` still requires an operator-provided WISP/full TCP relay endpoint because fetch relay does not tunnel arbitrary port 443 traffic.
 * **Acceptance Criteria**:
   - `linux alpine` can run `apk update` without manual mirror/proxy setup.
-  - Guest `curl https://example.com` succeeds through a documented relay path.
+  - Guest full-TCP relay can be selected through a documented WISP relay path.
   - Terminal docs explain how to configure or operate the relay in development and production.
+* **Verification**:
+  - `scripts/build-alpine-initramfs.sh` writes a same-origin mirror under `public/v86/apk/main/x86/`.
+  - `vite.config.js` serves `/v86/apk/*` and `/Web-OS/v86/apk/*` as raw octet-stream files so `.tar.gz` is not decompressed by browser fetch.
+  - `terminal.html` rewrites `/etc/apk/repositories` to `http://<current-port>.external/v86/apk/main` after Alpine reaches the shell prompt.
+  - Chrome DevTools MCP verified `apk update` returns `OK: 5869 distinct packages available` on `http://localhost:5178/Web-OS/terminal.html`.
+  - `linux alpine wisp://host:port` and `linux alpine wisps://host:port` are accepted as v86 WISP relay configuration routes.
+
+### 🎫 Issue Key: VORTEX-128
+* **Summary**: Operate WISP Full TCP Relay for Direct Guest HTTPS
+* **Issue Type**: Story
+* **Priority**: Medium
+* **Status**: To Do
+* **Description**: The Vortex terminal can pass WISP relay URLs into v86, but this repository does not yet include an operated WISP relay daemon. Add or document an approved relay service so guest commands such as `curl https://example.com` work as direct outbound TCP from the VM.
+* **Acceptance Criteria**:
+  - A development WISP relay endpoint is available without manual ad-hoc setup.
+  - `linux alpine wisp://...` or `linux alpine wisps://...` can run `curl https://example.com` successfully in Chrome DevTools MCP.
+  - Production deployment docs cover relay hosting, TLS, and security boundaries.
 
 ---
 
