@@ -118,3 +118,52 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
   - Dynamic App installation successfully fetches manifests from third-party domains (e.g. raw.githubusercontent.com) without triggering CORS block.
   - The proxy path is configurable from the settings panel.
   - Robust sanitization applies to proxy response before parsing.
+
+---
+
+## 🗂️ Epic: Chrome DevTools Review Findings
+
+### 🎫 Issue Key: VORTEX-109
+* **Summary**: Fix Manifest Permission Token Grammar for KB-MCP Capabilities
+* **Issue Type**: Bug
+* **Priority**: Critical
+* **Status**: Done
+* **Description**: Chrome DevTools review on 2026-05-20 found that installing the bundled local `manifest.json` fails because `plugin-installer.js` rejects `kb-mcp:read`. The permission tokenizer currently does not allow hyphenated capability namespaces before the first colon.
+* **Acceptance Criteria**:
+  - Installing `http://localhost:5173/manifest.json` from the Add App modal succeeds.
+  - `kb-mcp:read` and `kb-mcp:write` are accepted as valid permission tokens.
+  - Malformed or unsafe permission strings are still rejected.
+  - Regression coverage proves the bundled manifest can pass sanitization.
+
+### 🎫 Issue Key: VORTEX-110
+* **Summary**: Add User-Facing KB-MCP Configuration and Health Check
+* **Issue Type**: Story
+* **Priority**: High
+* **Status**: To Do
+* **Description**: KB-MCP runtime setup currently requires `window.vortexKernel.configureKb({ apiKey, kbId })` from the browser console. Add a Settings UI section for KB-MCP configuration so users can configure and verify the integration without console access.
+* **Acceptance Criteria**:
+  - Settings can save KB ID and API key presence without rendering the raw saved key.
+  - A health check reports configured, missing-key, missing-KB, and request-failed states clearly.
+  - A sandboxed plugin can complete a `kb:read` request through the host proxy after configuration.
+  - Unauthorized plugins continue to receive capability-denied errors.
+
+### 🎫 Issue Key: VORTEX-111
+* **Summary**: Wire or Disable Placeholder Dock Apps
+* **Issue Type**: Task
+* **Priority**: Medium
+* **Status**: To Do
+* **Description**: Chrome DevTools review found the Dashboard and Files Dock icons render as first-class apps but have no click handlers.
+* **Acceptance Criteria**:
+  - Dashboard and Files either open functional windows or render as visibly unavailable.
+  - Clicking every enabled Dock icon produces an observable result.
+  - The behavior is covered by a browser smoke check.
+
+### 🎫 Issue Key: VORTEX-112
+* **Summary**: Add Favicon Asset to Remove Browser 404 Noise
+* **Issue Type**: Task
+* **Priority**: Low
+* **Status**: To Do
+* **Description**: The main route currently triggers a non-blocking `/favicon.ico` 404 in Chrome DevTools.
+* **Acceptance Criteria**:
+  - Loading `http://localhost:5173/` no longer produces a favicon 404.
+  - Console and network reviews can distinguish real runtime issues from asset noise.

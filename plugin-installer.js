@@ -34,7 +34,9 @@ function getCorsProxy() {
 
 const ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{1,127}$/;
 const VERSION_PATTERN = /^[0-9]+(\.[0-9]+){0,3}([-+][a-zA-Z0-9.]+)?$/;
-const TOKEN_PATTERN = /^[a-zA-Z][a-zA-Z0-9]*(:[a-zA-Z0-9/_.-]+)*$/;
+// The namespace segment allows hyphens so capability namespaces like
+// `kb-mcp` are valid (VORTEX-109); colon-delimited segments already do.
+const TOKEN_PATTERN = /^[a-zA-Z][a-zA-Z0-9-]*(:[a-zA-Z0-9/_.-]+)*$/;
 const MAX_PERMISSIONS = 32;
 
 // Origin safety validation: a manifest URL is accepted only if it is
