@@ -97,7 +97,7 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
 * **Summary**: Implement VFS Concurrent Write Mutex Lock
 * **Issue Type**: Story
 * **Priority**: High
-* **Status**: To Do
+* **Status**: Done
 * **Description**: Prevent data collisions and file corruption by designing an asynchronous transactional Mutex (Mutual Exclusion) lock mechanism inside `jsonl-storage-engine.js` so only one process can write to a file path at a time.
 * **Acceptance Criteria**:
   - Concurrent writes to the same filePath are queued sequentially.

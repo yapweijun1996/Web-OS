@@ -51,7 +51,7 @@ async _commitAppend(filePath, text) {
 }
 ```
 
-Every mutation of a file runs inside a per-path **serialized write queue** (`_enqueue`). Without it, two concurrent read-modify-write appends would race on the same record and one write would be silently lost.
+Every mutation of a file runs inside a per-path **serialized write queue** (`_enqueue`). Without it, two concurrent read-modify-write appends would race on the same record and one write would be silently lost. This queue is the **VORTEX-107 asynchronous write mutex**: concurrent writes to the same `filePath` are queued sequentially and resolve in order with zero data loss (see `test.html` Test 4 for the 25-way concurrency proof).
 
 ---
 

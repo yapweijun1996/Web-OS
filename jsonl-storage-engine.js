@@ -32,8 +32,10 @@ class CompressedStorageEngine {
   }
 
   // Serializes every mutation of a given file through a per-path promise chain.
-  // Without this, two concurrent read-modify-write appends race on the same
-  // record and one write is silently lost.
+  // This IS the VORTEX-107 asynchronous write mutex: concurrent writes to the
+  // same filePath queue sequentially and resolve in order. Without it, two
+  // concurrent read-modify-write appends race on the same record and one write
+  // is silently lost (see test.html Test 4 for the 25-way concurrency proof).
   _enqueue(filePath, task) {
     const prev = this.writeChains.get(filePath) || Promise.resolve();
     const result = prev.then(() => task(), () => task());
