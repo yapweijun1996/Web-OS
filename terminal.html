@@ -70,6 +70,12 @@
           libUrl: `${V86_BASE}libv86.js`,
           bzimageUrl: `${V86_BASE}buildroot-bzimage68.bin`,
           initrdUrl: `${V86_BASE}alpine-initramfs.cpio.gz`,
+          networkRelayUrl: 'fetch',
+          netDevice: {
+            type: 'ne2k',
+            relay_url: 'fetch',
+            dns_method: 'doh'
+          },
           cmdline: 'console=ttyS0 earlyprintk=serial,ttyS0 root=/dev/ram0 rw init=/init',
           memorySize: 192 * 1024 * 1024
         },
@@ -166,7 +172,9 @@
       async function getWebContainer() {
         if (webcontainer) return webcontainer;
         if (!window.crossOriginIsolated) {
-          term.writeln('WebContainer needs cross-origin isolation. Restart Vite so COOP/COEP headers from vite.config.js apply.');
+          term.writeln('[Vortex] Cross-origin isolation is not yet active.');
+          term.writeln('[Vortex] The page will reload automatically once the service worker activates — please wait a moment.');
+          throw new Error('Not cross-origin isolated. Page will reload automatically.');
         }
         term.writeln('Booting WebContainer Node.js runtime...');
         webcontainer = await WebContainer.boot({ coep: 'credentialless', workdirName: 'vortex' });
@@ -412,7 +420,7 @@
       function writeAlpineNotes() {
         term.writeln('Alpine Linux VM profile: official Alpine x86 minirootfs as a v86 initramfs.');
         term.writeln('Shell: /bin/sh (BusyBox ash). Package manager: apk.');
-        term.writeln('When v86 networking has a DHCP path: udhcpc -i eth0 && apk update && apk add bash curl ca-certificates.');
+        term.writeln('Networking: v86 fetch relay is enabled for DHCP/DNS/HTTP package access.');
       }
 
       function writeLinuxHelp() {
