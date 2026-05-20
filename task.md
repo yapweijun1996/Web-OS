@@ -265,7 +265,7 @@ is `docs/macos-design-guidelines.md`; every ticket references a section of it.
 * **Summary**: Adopt the Liquid Glass material system
 * **Issue Type**: Story
 * **Priority**: High
-* **Status**: To Do
+* **Status**: Done
 * **Description**: Replace the flat frosted-blur panels with a reusable Liquid Glass material (translucent tint + `backdrop-filter: blur() saturate()` + faint edge highlight + inner specular highlight + soft drop shadow). Apply it to every floating surface: menu dropdowns, Dock, window chrome, modals, popovers. See `docs/macos-design-guidelines.md` §2.
 * **Acceptance Criteria**:
   - A single CSS class/token set defines the Regular Liquid Glass surface and is reused by all floating surfaces.
