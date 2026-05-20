@@ -5,14 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- Cross-origin isolation shim so WebContainer works when this page is
        opened standalone, not just as an iframe inside the COI host. -->
-  <script>
-    (() => {
-      const script = document.createElement('script');
-      script.async = false;
-      script.src = new URL('coi-serviceworker.js', window.location.href).href;
-      document.head.appendChild(script);
-    })();
-  </script>
+  <script type="module" src="./coi-loader.js"></script>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <title>Terminal</title>
   <style>

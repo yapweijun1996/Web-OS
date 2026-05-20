@@ -9,10 +9,9 @@ const htmlInputs = Object.fromEntries(
     .map((file) => [file.replace(/\.html$/, ''), resolve(rootDir, file)])
 );
 
-// In production Vite extracts every <script type="module"> to an external
-// bundle, leaving no inline scripts in the output HTML. Strip 'unsafe-inline'
-// from script-src at build time so the deployed CSP is strict. The source
-// index.html keeps 'unsafe-inline' so the Vite dev server works unmodified.
+// In production Vite extracts module scripts to external bundles. Keep all
+// required boot scripts external too, then strip 'unsafe-inline' from
+// script-src at build time so the deployed CSP stays strict.
 function strictCspPlugin() {
   return {
     name: 'strict-csp',
