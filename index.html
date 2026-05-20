@@ -68,15 +68,18 @@
     .menu-clock { font-variant-numeric: tabular-nums; }
     .menu-status svg, .menu-logo svg { display: block; }
 
-    /* Desktop Wallpaper & Icons Grid */
+    /* Desktop Wallpaper & Icons Grid (icons fill from the top-right, macOS-style) */
     #desktop {
       flex: 1;
       position: relative;
       padding: 18px;
       display: grid;
-      grid-template-columns: repeat(auto-fill, 96px);
-      grid-auto-rows: 96px;
+      grid-auto-flow: column;
+      grid-template-rows: repeat(auto-fill, 96px);
+      grid-auto-columns: 96px;
       gap: 12px;
+      direction: rtl;
+      justify-content: start;
       align-content: start;
     }
 
@@ -89,6 +92,7 @@
       border-radius: 8px;
       transition: background 0.15s, transform 0.1s;
       user-select: none;
+      direction: ltr;
     }
 
     .desktop-icon:hover { background: rgba(255, 255, 255, 0.14); }
@@ -155,6 +159,8 @@
     /* Window UI Component */
     .window {
       position: absolute;
+      top: 0;
+      left: 0;
       width: 540px;
       height: 400px;
       background: var(--window-bg);
@@ -214,6 +220,16 @@
     .window-controls:hover .win-close::before { content: '\00d7'; opacity: 1; }
     .window-controls:hover .win-min::before { content: '\2212'; opacity: 1; }
     .window-controls:hover .win-max::before { content: '\002b'; opacity: 1; }
+
+    /* Inactive (non-focused) windows dim their traffic lights and title. */
+    .window:not(.focused) .win-btn {
+      background: #565659;
+      box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.25);
+    }
+
+    .window:not(.focused) .window-title {
+      color: var(--text-dim);
+    }
 
     .window-title {
       position: absolute;
@@ -352,6 +368,7 @@
     import { installManifest } from './plugin-installer.js';
     import { CompressedStorageEngine } from './jsonl-storage-engine.js';
     import { SystemEventBus, CapabilityGuard, OrchestratorAgent } from './agent-core.js';
+    import { SystemEvents } from './contracts.js';
 
     let zIndexCounter = 10;
     let installedApps = loadInstalledApps();
@@ -386,6 +403,22 @@
         zIndexCounter = 10 + wins.length - 1;
       }
       return ++zIndexCounter;
+    }
+
+    // Tracks the frontmost window: only the focused window shows full-color
+    // traffic lights, matching macOS active/inactive window chrome.
+    function focusWindow(win) {
+      document.querySelectorAll('.window.focused').forEach(w => w.classList.remove('focused'));
+      win.classList.add('focused');
+    }
+
+    // After a window closes, hand focus to the topmost remaining window.
+    function focusTopWindow() {
+      const wins = [...document.querySelectorAll('.window')];
+      if (!wins.length) return;
+      const top = wins.reduce((a, b) =>
+        (Number(b.style.zIndex) || 0) > (Number(a.style.zIndex) || 0) ? b : a);
+      focusWindow(top);
     }
 
     // Build the window chrome (header + traffic-light buttons) using DOM APIs so
@@ -439,7 +472,14 @@
     window.vortexKernel = {
       bus: systemBus,
       storage: storageEngine,
-      get orchestrator() { return orchestrator; }
+      get orchestrator() { return orchestrator; },
+      // VORTEX-105: runtime KB config without redeployment.
+      // Usage: window.vortexKernel.configureKb({ apiKey: 'YOUR_KEY', kbId: 'YOUR_KB_ID' })
+      configureKb({ apiKey, kbId } = {}) {
+        if (apiKey) localStorage.setItem('vortex_kb_api_key', apiKey);
+        if (kbId)   localStorage.setItem('vortex_kb_id', kbId);
+        console.log('[Vortex] KB config updated. Relaunch any running plugins to apply.');
+      }
     };
 
     // Setup dragging logic with GPU Hardware Acceleration
@@ -491,14 +531,15 @@
 
       win.append(header, body);
 
-      closeBtn.addEventListener('click', () => win.remove());
-      win.addEventListener('pointerdown', () => { win.style.zIndex = nextZIndex(); });
+      closeBtn.addEventListener('click', () => { win.remove(); focusTopWindow(); });
+      win.addEventListener('pointerdown', () => { win.style.zIndex = nextZIndex(); focusWindow(win); });
 
       setupDragging(win, header, offsetX, offsetY);
       desktop.appendChild(win);
+      focusWindow(win);
 
       // VORTEX-104: surface the launch as a system trigger on the event bus.
-      systemBus.emit('app:launch', { title, src, kind: 'system' });
+      systemBus.emit(SystemEvents.APP_LAUNCH, { title, src, kind: 'system' });
     };
 
     // Advanced Window Opener for Sandboxed Plugins
@@ -519,10 +560,11 @@
 
       win.append(header, body);
 
-      win.addEventListener('pointerdown', () => { win.style.zIndex = nextZIndex(); });
+      win.addEventListener('pointerdown', () => { win.style.zIndex = nextZIndex(); focusWindow(win); });
 
       setupDragging(win, header, offsetX, offsetY);
       desktop.appendChild(win);
+      focusWindow(win);
 
       // Resolve absolute entrypoint relative to manifest URL
       const resolvedEntrypoint = new URL(manifest.entrypoint, manifestUrl).href;
@@ -533,10 +575,11 @@
       closeBtn.addEventListener('click', () => {
         harness.destroy();
         win.remove();
+        focusTopWindow();
       });
 
       // VORTEX-104: surface the plugin launch as a system trigger.
-      systemBus.emit('app:launch', { app: manifest.id, name: manifest.name, kind: 'plugin' });
+      systemBus.emit(SystemEvents.APP_LAUNCH, { app: manifest.id, name: manifest.name, kind: 'plugin' });
     };
 
     // Render installed plugins dynamically
