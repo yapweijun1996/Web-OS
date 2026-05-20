@@ -34,22 +34,6 @@ function _showNotification(message) {
   setTimeout(() => el.remove(), 4000);
 }
 
-// Extract the path prefix encoded in a scoped FS capability token.
-// 'fs:write:/reports' → '/reports'   'fs:read:/documents' → '/documents'
-function _fsScopeFromToken(token) {
-  const m = token.match(/^fs:(?:write|read):(.+)$/);
-  return m ? m[1] : null;
-}
-
-// True if `path` is within the scope encoded in the FS capability token.
-// Prevents a plugin from using a scoped token to access paths it was not granted.
-function _pathInScope(token, path) {
-  const scope = _fsScopeFromToken(token);
-  if (!scope) return false;
-  const prefix = scope.endsWith('/') ? scope : scope + '/';
-  return path === scope || path.startsWith(prefix);
-}
-
 class PluginHarness {
   constructor(manifest, url, kbProxy = new KBProxy(), storage = null) {
     this.manifest = manifest;
@@ -122,10 +106,10 @@ class PluginHarness {
           this.channel.port1.postMessage({ error: 'FS_WRITE requires payload.path (string).' });
           return;
         }
-        // Inner scope check: token must be an fs:write token AND its path
-        // prefix must cover payload.path — prevents cross-path VFS access.
-        if (!token.startsWith('fs:write:') || !_pathInScope(token, payload.path)) {
-          this.channel.port1.postMessage({ error: 'Permission Denied: path is outside the token scope.' });
+        // Inner check: the presented token must authorize fs:write on this
+        // exact path — capability.js owns the verb + path-scope grammar.
+        if (!this.capabilities.authorizes(token, 'fs:write', payload.path)) {
+          this.channel.port1.postMessage({ error: 'Permission Denied: token does not authorize this path.' });
           return;
         }
         try {
@@ -145,8 +129,8 @@ class PluginHarness {
           this.channel.port1.postMessage({ error: 'FS_READ requires payload.path (string).' });
           return;
         }
-        if (!token.startsWith('fs:read:') || !_pathInScope(token, payload.path)) {
-          this.channel.port1.postMessage({ error: 'Permission Denied: path is outside the token scope.' });
+        if (!this.capabilities.authorizes(token, 'fs:read', payload.path)) {
+          this.channel.port1.postMessage({ error: 'Permission Denied: token does not authorize this path.' });
           return;
         }
         try {
@@ -163,12 +147,11 @@ class PluginHarness {
           this.channel.port1.postMessage({ error: 'SYSTEM_NOTIFY requires payload.message (string).' });
           return;
         }
-        // Exact token check — only 'system:notify' may trigger notifications,
-        // not just any token the plugin happens to hold.
-        const requiredToken = ACTION_REQUIRED_TOKEN[action];
-        if (token !== requiredToken) {
+        // Only the 'system:notify' capability authorizes notifications — not
+        // just any token the plugin happens to hold.
+        if (!this.capabilities.authorizes(token, ACTION_REQUIRED_TOKEN[action])) {
           this.channel.port1.postMessage({
-            error: `Permission Denied: action '${action}' requires the '${requiredToken}' capability token.`
+            error: `Permission Denied: action '${action}' requires the '${ACTION_REQUIRED_TOKEN[action]}' capability.`
           });
           return;
         }
@@ -190,10 +173,9 @@ class PluginHarness {
 
       case IpcActions.KB_READ:
       case IpcActions.KB_WRITE: {
-        const requiredKbToken = ACTION_REQUIRED_TOKEN[action];
-        if (token !== requiredKbToken) {
+        if (!this.capabilities.authorizes(token, ACTION_REQUIRED_TOKEN[action])) {
           this.channel.port1.postMessage({
-            error: `Permission Denied: action '${action}' requires the '${requiredKbToken}' capability token`
+            error: `Permission Denied: action '${action}' requires the '${ACTION_REQUIRED_TOKEN[action]}' capability`
           });
           return;
         }
