@@ -468,6 +468,29 @@
       line-height: 1.5;
     }
 
+    .wallpaper-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .wallpaper-swatch {
+      height: 46px;
+      border-radius: 8px;
+      border: 2px solid transparent;
+      padding: 0;
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+
+    .wallpaper-swatch:hover { transform: translateY(-1px); }
+
+    .wallpaper-swatch.selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.4);
+    }
+
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
     .btn {
@@ -558,6 +581,8 @@
   <div id="settings-modal">
     <h3>Settings</h3>
     <form id="settings-form">
+      <p>Desktop wallpaper.</p>
+      <div class="wallpaper-grid" id="wallpaper-grid"></div>
       <p>KB-MCP configuration for sandboxed apps that request knowledge-base access.</p>
       <label class="settings-label" for="kb-id-input">KB ID</label>
       <input type="text" id="kb-id-input" name="kb-id" placeholder="Knowledge base UUID" autocomplete="off">
@@ -916,10 +941,53 @@
       updateKbSettingsStatus();
     }
 
+    // Desktop wallpaper picker — preset backgrounds applied to <body> and
+    // persisted in localStorage so the choice survives reloads.
+    const WALLPAPERS = {
+      Aurora: 'radial-gradient(ellipse 80% 60% at 25% 0%, rgba(122,90,210,0.45), transparent 60%), radial-gradient(ellipse 90% 70% at 85% 100%, rgba(30,120,210,0.40), transparent 60%), linear-gradient(165deg, #241a44 0%, #14143a 45%, #0c1330 100%)',
+      Midnight: 'linear-gradient(160deg, #10131f 0%, #07070d 100%)',
+      Sunset: 'radial-gradient(ellipse 90% 70% at 80% 0%, rgba(255,138,90,0.45), transparent 60%), linear-gradient(165deg, #3a1f3d 0%, #1b1531 60%, #0c1020 100%)',
+      Graphite: 'linear-gradient(165deg, #3a3a3e 0%, #232327 100%)'
+    };
+    const DEFAULT_WALLPAPER = 'Aurora';
+    const wallpaperGrid = document.getElementById('wallpaper-grid');
+
+    function currentWallpaper() {
+      const saved = localStorage.getItem('vortex_wallpaper');
+      return WALLPAPERS[saved] ? saved : DEFAULT_WALLPAPER;
+    }
+
+    function applyWallpaper(name) {
+      document.body.style.background = WALLPAPERS[name] || WALLPAPERS[DEFAULT_WALLPAPER];
+    }
+
+    function renderWallpaperGrid() {
+      const active = currentWallpaper();
+      wallpaperGrid.replaceChildren();
+      for (const [name, bg] of Object.entries(WALLPAPERS)) {
+        const swatch = document.createElement('button');
+        swatch.type = 'button';
+        swatch.className = 'wallpaper-swatch' + (name === active ? ' selected' : '');
+        swatch.style.background = bg;
+        swatch.title = name;
+        swatch.setAttribute('aria-label', `Wallpaper: ${name}`);
+        swatch.addEventListener('click', () => {
+          localStorage.setItem('vortex_wallpaper', name);
+          applyWallpaper(name);
+          renderWallpaperGrid();
+        });
+        wallpaperGrid.appendChild(swatch);
+      }
+    }
+
+    // Apply the saved wallpaper on startup.
+    applyWallpaper(currentWallpaper());
+
     function openSettings() {
       corsProxyInput.value = localStorage.getItem('vortex_cors_proxy_url') || '';
       kbIdInput.value = localStorage.getItem('vortex_kb_id') || '';
       kbApiKeyInput.value = '';
+      renderWallpaperGrid();
       updateKbSettingsStatus();
       settingsModal.style.display = 'block';
     }
