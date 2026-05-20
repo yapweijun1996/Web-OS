@@ -38,6 +38,12 @@ function bootEmulator(resources) {
 
   // Load the v86 library. A missing libv86.js throws synchronously here.
   try {
+    // v86's fetch relay checks window.location to upgrade browser fetches
+    // from http to https. In a dedicated worker, self.location is the
+    // equivalent global location object.
+    if (typeof self.window === 'undefined') {
+      self.window = self;
+    }
     self.importScripts(resources.libUrl);
   } catch (err) {
     reportError(

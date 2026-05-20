@@ -286,11 +286,13 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
   - Production build emits a Vite-managed `assets/v86-worker-*.js` worker file.
   - `linux alpine` no longer crashes the worker in a production preview.
   - The Alpine APK mirror URL includes the `/Web-OS/` base path on localhost and GitHub Pages.
+  - GitHub Pages HTTPS deployment does not mixed-content-block the v86 fetch relay mirror request.
 * **Verification**:
-  - `npm run build` emits `dist/assets/v86-worker-DMN8K4_R.js`.
+  - `npm run build` emits `dist/assets/v86-worker-*.js`.
   - Chrome DevTools MCP reproduced the old deployed failure as `GET /Web-OS/v86-worker.js [404]` with `[V86LinuxBridge] Worker crashed`.
   - Chrome DevTools MCP verified `http://localhost:4173/Web-OS/terminal.html` boots `linux alpine` to the Alpine shell with no worker crash.
   - Chrome DevTools MCP verified `http://localhost:5178/Web-OS/terminal.html` rewrites `/etc/apk/repositories` to `http://5178.external/Web-OS/v86/apk/main` and `apk update` returns `OK: 5869 distinct packages available`.
+  - Chrome DevTools MCP found the first deployed Pages fix still returned `HTTP 502: Bad Gateway` for `apk update`; `v86-worker.js` now exposes `self` as `window` so v86 upgrades relay fetches to HTTPS in the worker.
 
 ### 🎫 Issue Key: VORTEX-128
 * **Summary**: Document Optional External WISP Relay Without Frontend Runtime Dependency

@@ -177,7 +177,7 @@ On deployed hosts such as GitHub Pages it uses the current host and base path:
 http://<current-host>/<base-path>/v86/apk/main
 ```
 
-The v86 fetch relay upgrades those browser fetches to HTTPS when the page itself is loaded over HTTPS. Vite serves that mirror through a raw-file middleware in development so `APKINDEX.tar.gz` and `.apk` files are not browser-decompressed before v86 relays them to the guest. GitHub Pages serves the same static files from `dist/v86/apk/main/x86/`.
+The v86 fetch relay upgrades those browser fetches to HTTPS when the page itself is loaded over HTTPS. The relay runs inside `v86-worker.js`, so the worker exposes `self` as `window` before loading v86; this lets v86's fetch relay read `location.protocol` and avoid mixed-content HTTP fetches on GitHub Pages. Vite serves that mirror through a raw-file middleware in development so `APKINDEX.tar.gz` and `.apk` files are not browser-decompressed before v86 relays them to the guest. GitHub Pages serves the same static files from `dist/v86/apk/main/x86/`.
 
 ### GitHub Pages Deployment
 
