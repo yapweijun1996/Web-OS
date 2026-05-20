@@ -126,6 +126,11 @@
       term.writeln('Vortex OS Terminal');
       term.writeln('Node/npm run in WebContainer. Python/pip run in Pyodide. Type "help".');
       term.writeln('Type "linux" to start the optional v86 real-kernel VM when assets are installed.');
+      if (!window.crossOriginIsolated) {
+        term.writeln('');
+        term.writeln('[Notice] First load: the page will reload once automatically to enable WebContainer.');
+        term.writeln('[Notice] Node/npm will be available after the reload — this only happens once per browser.');
+      }
       term.writeln('');
       writePrompt();
 
