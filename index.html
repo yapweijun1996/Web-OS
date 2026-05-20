@@ -485,6 +485,10 @@
     }
 
     .wallpaper-swatch:hover { transform: translateY(-1px); }
+    .wallpaper-swatch:focus-visible {
+      outline: 2px solid #fff;
+      outline-offset: 2px;
+    }
 
     .wallpaper-swatch.selected {
       border-color: var(--accent);
@@ -941,8 +945,9 @@
       updateKbSettingsStatus();
     }
 
-    // Desktop wallpaper picker — preset backgrounds applied to <body> and
-    // persisted in localStorage so the choice survives reloads.
+    // Desktop wallpaper picker — swatches preview immediately, while Save
+    // persists the selected background so Cancel can still restore the prior
+    // wallpaper.
     const WALLPAPERS = {
       Aurora: 'radial-gradient(ellipse 80% 60% at 25% 0%, rgba(122,90,210,0.45), transparent 60%), radial-gradient(ellipse 90% 70% at 85% 100%, rgba(30,120,210,0.40), transparent 60%), linear-gradient(165deg, #241a44 0%, #14143a 45%, #0c1330 100%)',
       Midnight: 'linear-gradient(160deg, #10131f 0%, #07070d 100%)',
@@ -951,6 +956,7 @@
     };
     const DEFAULT_WALLPAPER = 'Aurora';
     const wallpaperGrid = document.getElementById('wallpaper-grid');
+    let pendingWallpaper = null;
 
     function currentWallpaper() {
       const saved = localStorage.getItem('vortex_wallpaper');
@@ -961,8 +967,14 @@
       document.body.style.background = WALLPAPERS[name] || WALLPAPERS[DEFAULT_WALLPAPER];
     }
 
+    function saveWallpaper(name) {
+      if (WALLPAPERS[name]) {
+        localStorage.setItem('vortex_wallpaper', name);
+      }
+    }
+
     function renderWallpaperGrid() {
-      const active = currentWallpaper();
+      const active = pendingWallpaper || currentWallpaper();
       wallpaperGrid.replaceChildren();
       for (const [name, bg] of Object.entries(WALLPAPERS)) {
         const swatch = document.createElement('button');
@@ -971,8 +983,9 @@
         swatch.style.background = bg;
         swatch.title = name;
         swatch.setAttribute('aria-label', `Wallpaper: ${name}`);
+        swatch.setAttribute('aria-pressed', name === active ? 'true' : 'false');
         swatch.addEventListener('click', () => {
-          localStorage.setItem('vortex_wallpaper', name);
+          pendingWallpaper = name;
           applyWallpaper(name);
           renderWallpaperGrid();
         });
@@ -987,17 +1000,21 @@
       corsProxyInput.value = localStorage.getItem('vortex_cors_proxy_url') || '';
       kbIdInput.value = localStorage.getItem('vortex_kb_id') || '';
       kbApiKeyInput.value = '';
+      pendingWallpaper = currentWallpaper();
       renderWallpaperGrid();
       updateKbSettingsStatus();
       settingsModal.style.display = 'block';
     }
 
     cancelSettingsBtn.addEventListener('click', () => {
+      pendingWallpaper = currentWallpaper();
+      applyWallpaper(pendingWallpaper);
       settingsModal.style.display = 'none';
     });
 
     saveSettingsBtn.addEventListener('click', () => {
       const value = corsProxyInput.value.trim();
+      saveWallpaper(pendingWallpaper || currentWallpaper());
       saveKbSettings();
       if (value) {
         localStorage.setItem('vortex_cors_proxy_url', value);
