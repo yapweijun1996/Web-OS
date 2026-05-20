@@ -213,3 +213,111 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
 * **Verification**:
   - Chrome DevTools MCP confirmed `npm i -g cowsay` followed by `cowsay hello` renders cowsay output and does not print `command not found`.
   - Chrome DevTools MCP confirmed `npm i -g @openai/codex` followed by `codex --version` executes the installed binary and does not print `codex: command not found`.
+
+### 🎫 Issue Key: VORTEX-116
+* **Summary**: Handle Codex Native CLI Limitation in WebContainer
+* **Issue Type**: Bug
+* **Priority**: High
+* **Status**: Done
+* **Description**: After `npm i -g @openai/codex`, running `codex` reached the installed launcher but failed with `jsh: command not found: Cannot` and exit code 127 because the current Codex npm package starts a native Linux ELF binary that browser WebContainer cannot execute.
+* **Acceptance Criteria**:
+  - `codex` no longer falls through to the WebContainer shell/native binary failure.
+  - The Terminal explains that Codex CLI must run in the host terminal or a real Linux VM, not browser WebContainer.
+  - Other npm global binaries that are WebContainer-compatible still run through the existing global binary dispatch path.
+* **Verification**:
+  - Chrome DevTools MCP confirmed `codex` prints the native-binary compatibility message.
+  - Chrome DevTools MCP confirmed `codex` output no longer contains `jsh: command not found: Cannot` or `Process exited with code 127`.
+
+---
+
+## 🗂️ Epic: macOS Tahoe 26 Design Alignment
+
+Align the Vortex OS desktop with the latest macOS look and feel — **macOS Tahoe 26**
+and its **Liquid Glass** design language. The design source of truth for this epic
+is `docs/macos-design-guidelines.md`; every ticket references a section of it.
+
+### 🎫 Issue Key: VORTEX-117
+* **Summary**: Adopt the Liquid Glass material system
+* **Issue Type**: Story
+* **Priority**: High
+* **Status**: To Do
+* **Description**: Replace the flat frosted-blur panels with a reusable Liquid Glass material (translucent tint + `backdrop-filter: blur() saturate()` + faint edge highlight + inner specular highlight + soft drop shadow). Apply it to every floating surface: menu dropdowns, Dock, window chrome, modals, popovers. See `docs/macos-design-guidelines.md` §2.
+* **Acceptance Criteria**:
+  - A single CSS class/token set defines the Regular Liquid Glass surface and is reused by all floating surfaces.
+  - Glass surfaces use saturation (160–200%) plus blur, not blur alone, and carry a 0.5px edge highlight and inner specular highlight.
+  - Light and dark tints are both defined.
+
+### 🎫 Issue Key: VORTEX-118
+* **Summary**: Make the menu bar fully transparent
+* **Issue Type**: Task
+* **Priority**: Medium
+* **Status**: To Do
+* **Description**: macOS Tahoe renders the menu bar fully transparent so the wallpaper shows through. Remove the semi-opaque slab background and blur from `#menubar`, keeping only legible glyphs with a subtle text shadow. See §4.
+* **Acceptance Criteria**:
+  - `#menubar` has no background fill and no backdrop-filter.
+  - Menu-bar text stays legible over both bright and dark wallpapers.
+  - Menu dropdowns remain Liquid Glass panels.
+
+### 🎫 Issue Key: VORTEX-119
+* **Summary**: Introduce concentric corner-radius tokens
+* **Issue Type**: Task
+* **Priority**: Medium
+* **Status**: To Do
+* **Description**: Define a radius token scale (`--r-window`, `--r-panel`, `--r-dock`, `--r-control`, `--r-capsule`) and apply it so nested rounded rectangles are concentric (child radius = parent radius − gap). See §3.
+* **Acceptance Criteria**:
+  - All hardcoded `border-radius` values are replaced by radius tokens.
+  - Nested elements (panel → row, window → toolbar button) are visibly concentric.
+
+### 🎫 Issue Key: VORTEX-120
+* **Summary**: Convert controls to capsule shapes
+* **Issue Type**: Story
+* **Priority**: Medium
+* **Status**: To Do
+* **Description**: Push buttons, segmented controls, and toggles use full-capsule radii in Tahoe; text fields use the small control radius. Restyle `.btn` and related controls, add a consistent accent focus ring, and ensure ≥28px hit targets. See §7.
+* **Acceptance Criteria**:
+  - Buttons and segmented controls render as capsules; text fields use `--r-control`.
+  - Every focusable control shows an accent focus ring on keyboard focus.
+  - All interactive controls are at least 28px tall.
+
+### 🎫 Issue Key: VORTEX-121
+* **Summary**: Unify the window toolbar with the window body
+* **Issue Type**: Task
+* **Priority**: Medium
+* **Status**: To Do
+* **Description**: Tahoe toolbars share the window background instead of a distinct titlebar color. Remove the separate `--titlebar` fill so the window header and body read as one surface; give toolbar buttons only a slight drop shadow for affordance. See §6.
+* **Acceptance Criteria**:
+  - The window header no longer uses a distinct background color from the window body.
+  - Toolbar/header buttons remain discoverable via a subtle shadow, not a filled bar.
+  - Focused vs. unfocused window states are still visually distinct.
+
+### 🎫 Issue Key: VORTEX-122
+* **Summary**: Build a real Liquid Glass Control Center panel
+* **Issue Type**: Story
+* **Priority**: Medium
+* **Status**: To Do
+* **Description**: The menu-bar Control Center glyph currently opens nothing. Build a Liquid Glass panel with a grid of rounded tiles (e.g. wallpaper, accent color, a couple of toggles) so the control is functional, not decorative. See §8.
+* **Acceptance Criteria**:
+  - Clicking the Control Center glyph opens a Liquid Glass panel.
+  - The panel contains at least three working tiles.
+  - The panel closes on outside click / Escape.
+
+### 🎫 Issue Key: VORTEX-123
+* **Summary**: Replace emoji app icons with squircle layered icons
+* **Issue Type**: Story
+* **Priority**: Low
+* **Status**: To Do
+* **Description**: Desktop and Dock apps currently use raw emoji. Render them as macOS-style squircle (rounded-square) icon tiles with a layered background and glyph, consistent with Tahoe's icon treatment. See §5 and §9.
+* **Acceptance Criteria**:
+  - Dock and desktop icons render as squircle tiles, not bare emoji.
+  - Icon tiles share a consistent size, radius, and background treatment.
+
+### 🎫 Issue Key: VORTEX-124
+* **Summary**: Honor accessibility preferences for glass and motion
+* **Issue Type**: Story
+* **Priority**: High
+* **Status**: To Do
+* **Description**: Liquid Glass must degrade gracefully. Add media-query support for `prefers-reduced-transparency` (opaque surfaces), `prefers-contrast` (stronger borders/text), and `prefers-reduced-motion` (drop non-essential animation). Make the accent color user-selectable via the `--accent` variable. See §9 and §12.
+* **Acceptance Criteria**:
+  - With reduced transparency, every glass surface becomes fully opaque.
+  - With reduced motion, non-essential transforms/animations are removed.
+  - The system accent color is user-selectable and applied through `--accent`.
