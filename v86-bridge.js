@@ -8,7 +8,7 @@ const _V86 = import.meta.env.BASE_URL + 'v86/';
 
 class V86LinuxBridge {
   constructor(config = {}) {
-    this.workerScript = config.workerScript || 'v86-worker.js';
+    this.workerScript = config.workerScript || null;
 
     // Runtime resources handed to the worker. Defaults use BASE_URL so paths
     // resolve correctly regardless of the deployment sub-path (e.g. /Web-OS/).
@@ -36,7 +36,9 @@ class V86LinuxBridge {
 
   // Spawns the dedicated Web Worker running the v86 emulator.
   init() {
-    this.worker = new Worker(this.workerScript);
+    this.worker = this.workerScript
+      ? new Worker(this.workerScript)
+      : new Worker(new URL('./v86-worker.js', import.meta.url));
     this._setStatus('booting');
 
     // Bootstrap the v86 engine inside the worker.

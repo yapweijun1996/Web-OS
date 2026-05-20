@@ -272,20 +272,37 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
 * **Verification**:
   - `scripts/build-alpine-initramfs.sh` writes a same-origin mirror under `public/v86/apk/main/x86/`.
   - `vite.config.js` serves `/v86/apk/*` and `/Web-OS/v86/apk/*` as raw octet-stream files so `.tar.gz` is not decompressed by browser fetch.
-  - `terminal.html` rewrites `/etc/apk/repositories` to `http://<current-port>.external/v86/apk/main` after Alpine reaches the shell prompt.
+  - `terminal.html` rewrites `/etc/apk/repositories` to the active base-path-aware same-origin mirror after Alpine reaches the shell prompt.
   - Chrome DevTools MCP verified `apk update` returns `OK: 5869 distinct packages available` on `http://localhost:5178/Web-OS/terminal.html`.
   - `linux alpine wisp://host:port` and `linux alpine wisps://host:port` are accepted as v86 WISP relay configuration routes.
 
+### 🎫 Issue Key: VORTEX-129
+* **Summary**: Bundle v86 Worker for GitHub Pages Terminal Deployment
+* **Issue Type**: Bug
+* **Priority**: High
+* **Status**: Done
+* **Description**: The deployed GitHub Pages Terminal requested `/Web-OS/v86-worker.js` and crashed the v86 bridge because the worker script was referenced as a plain string and was not emitted into the production `dist` bundle.
+* **Acceptance Criteria**:
+  - Production build emits a Vite-managed `assets/v86-worker-*.js` worker file.
+  - `linux alpine` no longer crashes the worker in a production preview.
+  - The Alpine APK mirror URL includes the `/Web-OS/` base path on localhost and GitHub Pages.
+* **Verification**:
+  - `npm run build` emits `dist/assets/v86-worker-DMN8K4_R.js`.
+  - Chrome DevTools MCP reproduced the old deployed failure as `GET /Web-OS/v86-worker.js [404]` with `[V86LinuxBridge] Worker crashed`.
+  - Chrome DevTools MCP verified `http://localhost:4173/Web-OS/terminal.html` boots `linux alpine` to the Alpine shell with no worker crash.
+  - Chrome DevTools MCP verified `http://localhost:5178/Web-OS/terminal.html` rewrites `/etc/apk/repositories` to `http://5178.external/Web-OS/v86/apk/main` and `apk update` returns `OK: 5869 distinct packages available`.
+
 ### 🎫 Issue Key: VORTEX-128
-* **Summary**: Operate WISP Full TCP Relay for Direct Guest HTTPS
+* **Summary**: Document Optional External WISP Relay Without Frontend Runtime Dependency
 * **Issue Type**: Story
 * **Priority**: Medium
 * **Status**: To Do
-* **Description**: The Vortex terminal can pass WISP relay URLs into v86, but this repository does not yet include an operated WISP relay daemon. Add or document an approved relay service so guest commands such as `curl https://example.com` work as direct outbound TCP from the VM.
+* **Description**: The Vortex terminal can pass WISP relay URLs into v86, but Vortex OS must remain a frontend Web OS and must not require a localhost Node.js relay daemon for its default runtime. WISP is optional external infrastructure for direct guest TCP/HTTPS only; the default browser runtime remains v86 fetch relay plus same-origin APK mirror.
 * **Acceptance Criteria**:
-  - A development WISP relay endpoint is available without manual ad-hoc setup.
-  - `linux alpine wisp://...` or `linux alpine wisps://...` can run `curl https://example.com` successfully in Chrome DevTools MCP.
-  - Production deployment docs cover relay hosting, TLS, and security boundaries.
+  - Default `linux alpine` package workflows work without a localhost Node.js server.
+  - `linux alpine wisp://...` and `linux alpine wisps://...` remain optional explicit relay modes.
+  - Docs state that WISP hosting is external infrastructure and not part of the frontend-only Web OS runtime.
+  - If a WISP endpoint is provided by the operator, Chrome DevTools MCP can verify `curl https://example.com` through that endpoint.
 
 ---
 

@@ -431,8 +431,14 @@
       }
 
       function localApkMirrorRepository() {
+        const basePath = import.meta.env.BASE_URL;
+        const base = basePath.endsWith('/') ? basePath : `${basePath}/`;
+        const isLocalhost = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+        if (!isLocalhost) {
+          return `http://${window.location.host}${base}v86/apk/main`;
+        }
         const port = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
-        return `http://${port}.external/v86/apk/main`;
+        return `http://${port}.external${base}v86/apk/main`;
       }
 
       async function resourceAvailable(url) {

@@ -165,13 +165,35 @@ The build script also creates a same-origin APK mirror under:
 public/v86/apk/main/x86/
 ```
 
-`terminal.html` rewrites `/etc/apk/repositories` after Alpine reaches its shell prompt so the guest points to the current browser dev port:
+`terminal.html` rewrites `/etc/apk/repositories` after Alpine reaches its shell prompt. On localhost it uses v86's `port.external` mapping, including the Vite base path:
 
 ```text
-http://<current-port>.external/v86/apk/main
+http://<current-port>.external/<base-path>/v86/apk/main
 ```
 
-Vite serves that mirror through a raw-file middleware so `APKINDEX.tar.gz` and `.apk` files are not browser-decompressed before v86 relays them to the guest.
+On deployed hosts such as GitHub Pages it uses the current host and base path:
+
+```text
+http://<current-host>/<base-path>/v86/apk/main
+```
+
+The v86 fetch relay upgrades those browser fetches to HTTPS when the page itself is loaded over HTTPS. Vite serves that mirror through a raw-file middleware in development so `APKINDEX.tar.gz` and `.apk` files are not browser-decompressed before v86 relays them to the guest. GitHub Pages serves the same static files from `dist/v86/apk/main/x86/`.
+
+### GitHub Pages Deployment
+
+The GitHub Actions workflow in `.github/workflows/deploy.yml` installs dependencies, runs `npm run build`, uploads `dist`, and deploys it with `actions/deploy-pages`.
+
+Production Terminal support depends on these build outputs:
+
+- `terminal.html` and its bundled `assets/terminal-*.js`
+- `assets/v86-worker-*.js`
+- `v86/libv86.js`
+- `v86/v86.wasm`
+- `v86/buildroot-bzimage68.bin`
+- `v86/alpine-initramfs.cpio.gz`
+- `v86/apk/main/x86/*`
+
+The v86 worker must be created with Vite's tracked worker URL pattern. A plain string such as `new Worker('v86-worker.js')` works in the dev server but is not emitted into `dist`, causing GitHub Pages to request `/Web-OS/v86-worker.js` and fail with `Worker crashed`. The production build now emits `assets/v86-worker-*.js`.
 
 Inside the VM, bring up networking with:
 
@@ -180,14 +202,14 @@ udhcpc -i eth0
 apk update
 ```
 
-For a full TCP relay, boot Alpine with a WISP endpoint:
+For a full TCP relay, boot Alpine with an explicitly provided WISP endpoint:
 
 ```text
 linux alpine wisp://host:port
 linux alpine wisps://host:port
 ```
 
-The client-side v86 wiring accepts those relay URLs. Operating the WISP server itself is tracked separately because this repo currently does not include a relay daemon.
+The client-side v86 wiring accepts those relay URLs, but Vortex OS does not require or launch a localhost Node.js relay. The frontend runtime must remain browser-first: static assets, WebContainer/Pyodide, v86 fetch relay, and the same-origin APK mirror. A WISP server is an optional external infrastructure service, not part of the default frontend Web OS runtime.
 
 If `linux alpine` reports a missing initramfs asset, run the build script above.
 
