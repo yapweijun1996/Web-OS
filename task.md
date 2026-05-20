@@ -228,6 +228,31 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
   - Chrome DevTools MCP confirmed `codex` prints the native-binary compatibility message.
   - Chrome DevTools MCP confirmed `codex` output no longer contains `jsh: command not found: Cannot` or `Process exited with code 127`.
 
+### 🎫 Issue Key: VORTEX-125
+* **Summary**: Clarify Buildroot Linux VM Tooling Limits
+* **Issue Type**: Bug
+* **Priority**: Medium
+* **Status**: Done
+* **Description**: The `linux` command boots the default v86 Buildroot image successfully, but users can reasonably try package-install commands such as `curl -fsSL https://claude.ai/install.sh | bash`. The default image lacks `bash` and HTTPS-capable `curl`, producing confusing shell errors.
+* **Acceptance Criteria**:
+  - Terminal help explains that the default VM is Buildroot for kernel/serial checks.
+  - Terminal points users to WebContainer/Pyodide for npm/pip workflows.
+  - Docs record that full bash/HTTPS/package-manager support needs a prepared Alpine or Debian disk image.
+* **Verification**:
+  - `npm run build` completed successfully.
+  - Chrome DevTools MCP confirmed `help` includes the Buildroot and Alpine/Debian image requirement.
+
+### 🎫 Issue Key: VORTEX-126
+* **Summary**: Add Prepared Alpine or Debian v86 Disk Image
+* **Issue Type**: Story
+* **Priority**: High
+* **Status**: To Do
+* **Description**: Provide a real package-install Linux environment for v86 with `bash`, HTTPS-capable `curl`, CA certificates, and a package manager. The current default Buildroot image is suitable for kernel boot validation only.
+* **Acceptance Criteria**:
+  - `linux alpine` or equivalent boots an image with `bash` or a documented shell, HTTPS-capable `curl`, CA certificates, and package manager support.
+  - The image source, build process, checksum, and size are documented.
+  - Terminal clearly distinguishes Buildroot demo mode from package workstation mode.
+
 ---
 
 ## 🗂️ Epic: macOS Tahoe 26 Design Alignment

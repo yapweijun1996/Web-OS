@@ -201,6 +201,31 @@
         return false;
       }
 
+      async function readGlobalPackageJson(packageName) {
+        if (!webcontainer) return null;
+        try {
+          const raw = await webcontainer.fs.readFile(`${NPM_GLOBAL_PREFIX}/lib/node_modules/${packageName}/package.json`, 'utf-8');
+          return JSON.parse(raw);
+        } catch {
+          return null;
+        }
+      }
+
+      async function runCodexCommand(args) {
+        const pkg = await readGlobalPackageJson('@openai/codex');
+        if (args.includes('--version') || args.includes('-V')) {
+          if (pkg?.version) {
+            term.writeln(`@openai/codex ${pkg.version}`);
+          } else {
+            term.writeln('@openai/codex is not installed in this WebContainer session.');
+          }
+        }
+        term.writeln('Codex CLI cannot run inside browser WebContainer.');
+        term.writeln('Current @openai/codex launches a native Linux ELF binary for the interactive TUI.');
+        term.writeln('WebContainer can install the package, but it cannot execute that native binary.');
+        term.writeln('Run Codex from the host terminal instead: npm i -g @openai/codex && codex');
+      }
+
       async function getLoadPyodide() {
         if (!loadPyodideModule) {
           ({ loadPyodide: loadPyodideModule } = await import(/* @vite-ignore */ PYODIDE_MODULE_URL));
@@ -333,6 +358,13 @@
         term.writeln(`installed ${packages.join(', ')}`);
       }
 
+      function writeLinuxLimitations() {
+        term.writeln('Default Linux VM image: v86 Buildroot demo kernel.');
+        term.writeln('Available for kernel/serial checks; not a package-install workstation.');
+        term.writeln('Missing in this image: bash, apk, node, python3, and HTTPS-capable curl.');
+        term.writeln('Use WebContainer npm/Pyodide pip in Vortex shell, or add an Alpine/Debian disk image for full Linux package installs.');
+      }
+
       async function runCommand(line) {
         const args = parseArgs(line);
         const command = args.shift();
@@ -342,8 +374,9 @@
           case 'help':
             term.writeln('Commands: help, clear, date, pwd, cd, ls, cat, append, echo, write, whoami, uname, storage');
             term.writeln('Node: node -v | node index.js | npm -v | npm install <pkg> | npm i -g <pkg> | <global-bin>');
+            term.writeln('Codex: codex explains the browser WebContainer native-binary limitation.');
             term.writeln('Python: python -V | python -c "print(123)" | write hello.py "print(123)" | python hello.py | pip install <pkg>');
-            term.writeln('VM: linux starts optional v86 real-kernel mode after libv86.js/v86.wasm/BIOS/image assets are installed.');
+            term.writeln('VM: linux boots Buildroot for kernel/serial checks. Full bash/HTTPS/package installs need a prepared Alpine/Debian disk image.');
             break;
 
           case 'clear':
@@ -453,6 +486,10 @@
             await runWebContainerCommand(command, args);
             break;
 
+          case 'codex':
+            await runCodexCommand(args);
+            break;
+
           case 'python':
           case 'python3':
             await runPythonCommand(args);
@@ -501,10 +538,11 @@
         }
 
         term.writeln('Starting v86 real-kernel Linux VM...');
-        term.writeln('Default image: official v86 Buildroot Linux. Alpine/apk mode needs a prepared Alpine disk image URL.');
+        writeLinuxLimitations();
         mode = 'linux';
         const channel = new MessageChannel();
         linuxPort = channel.port2;
+        let linuxReadyHintShown = false;
         bridge = new V86LinuxBridge({
           onStatusChange(status) {
             if (status === 'error') {
@@ -520,6 +558,12 @@
         linuxPort.onmessage = (event) => {
           if (event.data && event.data.action === 'STDOUT') {
             term.write(event.data.data);
+            if (!linuxReadyHintShown && event.data.data.includes('~%')) {
+              linuxReadyHintShown = true;
+              term.writeln('');
+              term.writeln('[Vortex OS] Linux shell ready. This Buildroot image has sh, but no bash/apk/node/python3 and no HTTPS curl.');
+              term.writeln('[Vortex OS] Try: uname -a, ip addr, ifconfig, udhcpc. Use Vortex shell WebContainer for npm.');
+            }
           }
         };
         bridge.init();
