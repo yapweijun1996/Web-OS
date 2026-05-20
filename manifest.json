@@ -1,0 +1,20 @@
+{
+  "id": "com.vortex.agent.analyzer",
+  "name": "AI Data Analyzer",
+  "version": "1.0.0",
+  "description": "Performs data cleaning and generates JSONL reports on client storage.",
+  "entrypoint": "plugin.js",
+  "permissions": [
+    "fs:read:/documents",
+    "fs:write:/reports",
+    "agent:orchestrate",
+    "system:notify",
+    "kb-mcp:read",
+    "kb-mcp:write"
+  ],
+  "sandbox": {
+    "allowScripts": true,
+    "allowDownloads": false,
+    "allowSameOrigin": false
+  }
+}

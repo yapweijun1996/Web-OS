@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Compressed Storage Engine - Automated Browser Tests</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #1e1e2e;
+      color: #cdd6f4;
+      padding: 20px;
+    }
+    h1 {
+      color: #89b4fa;
+      border-bottom: 2px solid #45475a;
+      padding-bottom: 10px;
+    }
+    .test-case {
+      background: #313244;
+      border-radius: 6px;
+      padding: 15px;
+      margin-bottom: 12px;
+      border-left: 5px solid #45475a;
+    }
+    .test-case.pass {
+      border-left-color: #a6e3a1;
+    }
+    .test-case.fail {
+      border-left-color: #f38ba8;
+    }
+    .status {
+      font-weight: bold;
+    }
+    .status.pass { color: #a6e3a1; }
+    .status.fail { color: #f38ba8; }
+    pre {
+      background: #181825;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-family: 'Courier New', Courier, monospace;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Compressed Storage Engine (IndexedDB + JSONL.gz) Test Runner</h1>
+  <div id="results">Running tests...</div>
+
+  <script type="module">
+    import { CompressedStorageEngine } from './jsonl-storage-engine.js';
+
+    async function runTests() {
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.innerHTML = '';
+
+      const testCases = [
+        {
+          name: "Test 1: Initialize IndexedDB Store",
+          fn: async (engine) => {
+            await engine.init();
+            if (engine.db !== null && engine.db.name === 'WebOSFileSystemTest') {
+              return "Successfully initialized IndexedDB database.";
+            }
+            throw new Error("Database not initialized correctly.");
+          }
+        },
+        {
+          name: "Test 2: Append multiple compressed JSONL lines",
+          fn: async (engine) => {
+            const path = '/test_logs/app_events.jsonl.gz';
+            // Clear prior records
+            const transaction = engine.db.transaction(['files'], 'readwrite');
+            await new Promise((res, rej) => {
+              const req = transaction.objectStore('files').delete(path);
+              req.onsuccess = res;
+              req.onerror = rej;
+            });
+
+            // Append lines
+            await engine.appendToGzFile(path, JSON.stringify({ event: 'system_boot', level: 'info', timestamp: 1716240000 }));
+            await engine.appendToGzFile(path, JSON.stringify({ event: 'agent_start', level: 'warning', timestamp: 1716240005 }));
+            await engine.appendToGzFile(path, JSON.stringify({ event: 'user_login', level: 'info', timestamp: 1716240010 }));
+
+            return "Appended 3 records via stream pipeline and stored in IndexedDB.";
+          }
+        },
+        {
+          name: "Test 3: Decompress and verify line integrity",
+          fn: async (engine) => {
+            const path = '/test_logs/app_events.jsonl.gz';
+            const records = await engine.readGzFileLines(path);
+
+            if (records.length !== 3) {
+              throw new Error(`Expected 3 records, but got ${records.length}`);
+            }
+
+            if (records[1].event !== 'agent_start' || records[1].level !== 'warning') {
+              throw new Error(`Data corruption detected at record index 1. Got: ${JSON.stringify(records[1])}`);
+            }
+
+            return `Parsed all decompressed JSONL entries safely. Sample event: "${records[1].event}"`;
+          }
+        },
+        {
+          name: "Test 4: Concurrent simultaneous appends (no write collision)",
+          fn: async (engine) => {
+            const path = '/test_logs/concurrent.jsonl.gz';
+            await new Promise((res, rej) => {
+              const req = engine.db.transaction(['files'], 'readwrite').objectStore('files').delete(path);
+              req.onsuccess = res;
+              req.onerror = rej;
+            });
+
+            const COUNT = 25;
+            // Fire every append at once without awaiting in between - this is the
+            // scenario that loses data without a per-file serialized write queue.
+            const writes = [];
+            for (let i = 0; i < COUNT; i++) {
+              writes.push(engine.appendToGzFile(path, JSON.stringify({ seq: i })));
+            }
+            await Promise.all(writes);
+
+            const records = await engine.readGzFileLines(path);
+            if (records.length !== COUNT) {
+              throw new Error(`Write collision: expected ${COUNT} records, got ${records.length}`);
+            }
+            const seqs = new Set(records.map(r => r.seq));
+            for (let i = 0; i < COUNT; i++) {
+              if (!seqs.has(i)) throw new Error(`Lost record seq=${i} during concurrent writes`);
+            }
+            return `All ${COUNT} concurrent appends serialized without collision or data loss.`;
+          }
+        },
+        {
+          name: "Test 5: Debounced auto-save after 500ms idle",
+          fn: async (engine) => {
+            const path = '/test_logs/autosave.jsonl.gz';
+            await new Promise((res, rej) => {
+              const req = engine.db.transaction(['files'], 'readwrite').objectStore('files').delete(path);
+              req.onsuccess = res;
+              req.onerror = rej;
+            });
+
+            engine.queueLine(path, JSON.stringify({ msg: 'first' }));
+            engine.queueLine(path, JSON.stringify({ msg: 'second' }));
+            if (!engine.isDirty(path)) {
+              throw new Error('File should be marked dirty immediately after queueLine().');
+            }
+
+            // Wait past the 500ms debounce window plus a margin for the flush write.
+            await new Promise(r => setTimeout(r, 850));
+            if (engine.isDirty(path)) {
+              throw new Error('File still dirty after the auto-save window elapsed.');
+            }
+
+            const records = await engine.readGzFileLines(path);
+            if (records.length !== 2 || records[0].msg !== 'first' || records[1].msg !== 'second') {
+              throw new Error(`Auto-save did not persist queued lines correctly: ${JSON.stringify(records)}`);
+            }
+            return 'Dirty buffer auto-saved and committed after the 500ms idle window.';
+          }
+        },
+        {
+          name: "Test 6: Crash-recovery durability (reopen DB, 100% retrieval)",
+          fn: async (engine) => {
+            const path = '/test_logs/crash_recovery.jsonl.gz';
+            await new Promise((res, rej) => {
+              const req = engine.db.transaction(['files'], 'readwrite').objectStore('files').delete(path);
+              req.onsuccess = res;
+              req.onerror = rej;
+            });
+
+            const COUNT = 12;
+            for (let i = 0; i < COUNT; i++) {
+              engine.queueLine(path, JSON.stringify({ line: i, payload: 'crash-test-' + i }));
+            }
+            // Simulate a beforeunload durability barrier instead of waiting for the timer.
+            await engine.flushAll();
+
+            // Simulate a process restart: a fresh engine instance on the same DB.
+            const recoveredEngine = new CompressedStorageEngine('WebOSFileSystemTest', 1);
+            await recoveredEngine.init();
+            const records = await recoveredEngine.readGzFileLines(path);
+
+            if (records.length !== COUNT) {
+              throw new Error(`Lost data after crash: expected ${COUNT}, recovered ${records.length}`);
+            }
+            for (let i = 0; i < COUNT; i++) {
+              if (records[i].line !== i || records[i].payload !== 'crash-test-' + i) {
+                throw new Error(`Corruption at line ${i}: ${JSON.stringify(records[i])}`);
+              }
+            }
+            return `100% of ${COUNT} lines recovered intact from a fresh engine instance.`;
+          }
+        }
+      ];
+
+      // Create engine instance specifically for testing
+      const testEngine = new CompressedStorageEngine('WebOSFileSystemTest', 1);
+
+      for (const tc of testCases) {
+        const caseDiv = document.createElement('div');
+        caseDiv.className = 'test-case';
+        
+        const titleEl = document.createElement('h3');
+        titleEl.textContent = tc.name;
+        caseDiv.appendChild(titleEl);
+
+        const outPre = document.createElement('pre');
+        caseDiv.appendChild(outPre);
+
+        try {
+          const msg = await tc.fn(testEngine);
+          caseDiv.classList.add('pass');
+          const passLabel = document.createElement('span');
+          passLabel.className = 'status pass';
+          passLabel.textContent = '[PASS]';
+          outPre.appendChild(passLabel);
+          outPre.appendChild(document.createTextNode(' ' + msg));
+        } catch (err) {
+          caseDiv.classList.add('fail');
+          const failLabel = document.createElement('span');
+          failLabel.className = 'status fail';
+          failLabel.textContent = '[FAIL]';
+          outPre.appendChild(failLabel);
+          outPre.appendChild(document.createTextNode(` ${err.message}\nStack:\n${err.stack}`));
+        }
+        resultsDiv.appendChild(caseDiv);
+      }
+    }
+
+    runTests();
+  </script>
+</body>
+</html>

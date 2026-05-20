@@ -66,6 +66,13 @@
     .menu-app { font-weight: 600; }
     .menu-logo { padding: 3px 8px; }
     .menu-clock { font-variant-numeric: tabular-nums; }
+    .menu-fps {
+      font-variant-numeric: tabular-nums;
+      font-size: 11px;
+      color: var(--text-dim);
+      min-width: 46px;
+      justify-content: flex-end;
+    }
     .menu-status svg, .menu-logo svg { display: block; }
 
     /* Desktop Wallpaper & Icons Grid (icons fill from the top-right, macOS-style) */
@@ -231,6 +238,14 @@
       color: var(--text-dim);
     }
 
+    .window.maximized {
+      border-radius: 0;
+    }
+
+    .window.maximized .window-header {
+      cursor: default;
+    }
+
     .window-title {
       position: absolute;
       left: 0;
@@ -329,6 +344,7 @@
       <span class="menu-item menu-status" title="Wi-Fi">
         <svg width="16" height="11" viewBox="0 0 16 11"><path fill="currentColor" d="M8 8.6a1.4 1.4 0 1 0 0 2.8 1.4 1.4 0 0 0 0-2.8zM3.9 5.8 5.3 7.2a3.8 3.8 0 0 1 5.4 0l1.4-1.4a5.8 5.8 0 0 0-8.2 0zM1 2.9l1.4 1.4a8 8 0 0 1 11.2 0L15 2.9a10 10 0 0 0-14 0z"/></svg>
       </span>
+      <span class="menu-item menu-fps" id="menu-fps" title="Frames per second">-- FPS</span>
       <span class="menu-item menu-clock" id="menu-clock"></span>
     </div>
   </div>
@@ -367,8 +383,9 @@
     import { PluginHarness } from './host-core.js';
     import { installManifest } from './plugin-installer.js';
     import { CompressedStorageEngine } from './jsonl-storage-engine.js';
-    import { SystemEventBus, CapabilityGuard, OrchestratorAgent } from './agent-core.js';
+    import { SystemEventBus, OrchestratorAgent } from './agent-core.js';
     import { SystemEvents } from './contracts.js';
+    import { CapabilitySet } from './capability.js';
 
     let zIndexCounter = 10;
     let installedApps = loadInstalledApps();
@@ -414,11 +431,56 @@
 
     // After a window closes, hand focus to the topmost remaining window.
     function focusTopWindow() {
-      const wins = [...document.querySelectorAll('.window')];
+      const wins = [...document.querySelectorAll('.window')]
+        .filter(w => w.style.display !== 'none');
       if (!wins.length) return;
       const top = wins.reduce((a, b) =>
         (Number(b.style.zIndex) || 0) > (Number(a.style.zIndex) || 0) ? b : a);
       focusWindow(top);
+    }
+
+    // Minimize a window into the Dock: hide it and add a clickable Dock tile
+    // that restores and re-focuses it (macOS minimize-to-Dock behavior).
+    function minimizeWindow(win) {
+      if (win.style.display === 'none') return;
+      const title = win.querySelector('.window-title').textContent;
+      win.style.display = 'none';
+      win.classList.remove('focused');
+
+      const tile = document.createElement('div');
+      tile.className = 'dock-app dock-min-tile';
+      tile.title = title;
+      tile.textContent = '🪟';
+      tile.addEventListener('click', () => {
+        win.style.display = '';
+        tile.remove();
+        win.style.zIndex = nextZIndex();
+        focusWindow(win);
+      });
+      document.getElementById('dock').appendChild(tile);
+      focusTopWindow();
+    }
+
+    // Toggle a window between its current geometry and filling the desktop.
+    // Pre-maximize geometry is stashed on the element so restore is exact.
+    function toggleMaximize(win) {
+      if (win.classList.contains('maximized')) {
+        const s = win._restoreState || {};
+        win.style.transform = s.transform || 'translate3d(60px, 60px, 0)';
+        win.style.width = s.width || '';
+        win.style.height = s.height || '';
+        win.classList.remove('maximized');
+      } else {
+        win._restoreState = {
+          transform: win.style.transform,
+          width: win.style.width,
+          height: win.style.height
+        };
+        win.style.transform = 'translate3d(0px, 0px, 0)';
+        win.style.width = '100%';
+        win.style.height = '100%';
+        win.classList.add('maximized');
+      }
     }
 
     // Build the window chrome (header + traffic-light buttons) using DOM APIs so
@@ -443,7 +505,12 @@
       });
 
       header.append(controls, titleEl);
-      return { header, closeBtn: controls.querySelector('.win-close') };
+      return {
+        header,
+        closeBtn: controls.querySelector('.win-close'),
+        minBtn: controls.querySelector('.win-min'),
+        maxBtn: controls.querySelector('.win-max')
+      };
     }
 
     // VORTEX-104: kernel event bus + background multi-agent orchestrator.
@@ -456,7 +523,7 @@
     (async () => {
       await storageEngine.init();
       // The kernel grants the orchestrator exactly the capabilities it needs.
-      const orchestratorGuard = new CapabilityGuard(['agent:orchestrate', 'fs:write:/reports']);
+      const orchestratorGuard = new CapabilitySet(['agent:orchestrate', 'fs:write:/reports']);
       orchestrator = new OrchestratorAgent({
         bus: systemBus,
         storage: storageEngine,
@@ -465,8 +532,13 @@
       orchestrator.start();
     })();
 
-    // Durability barrier (VORTEX-102): commit pending auto-save buffers on exit.
-    window.addEventListener('beforeunload', () => { storageEngine.flushAll(); });
+    // Durability barrier (VORTEX-102): flush pending auto-save buffers when the
+    // tab is hidden or closed. visibilitychange fires before the page is torn
+    // down and allows async IDB writes to complete, unlike beforeunload which
+    // ignores the returned Promise and may not wait for IndexedDB commits.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) storageEngine.flushAll();
+    });
 
     // Kernel introspection surface (read access for the console / system apps).
     window.vortexKernel = {
@@ -489,6 +561,7 @@
       let currentX = initialX, currentY = initialY;
 
       header.addEventListener('pointerdown', (e) => {
+        if (win.classList.contains('maximized')) return;
         isDragging = true;
         startX = e.clientX - currentX;
         startY = e.clientY - currentY;
@@ -520,18 +593,23 @@
       const offsetY = 60 + (zIndexCounter % 5) * 30;
       win.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0)`;
 
-      const { header, closeBtn } = buildWindowChrome(title);
+      const { header, closeBtn, minBtn, maxBtn } = buildWindowChrome(title);
 
       const body = document.createElement('div');
       body.className = 'window-body';
 
       const iframe = document.createElement('iframe');
+      // Defense-in-depth: sandbox system-app iframes to prevent navigation
+      // hijack, popup creation, and other unrestricted behaviors.
+      iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-modals');
       iframe.src = src;
       body.appendChild(iframe);
 
       win.append(header, body);
 
       closeBtn.addEventListener('click', () => { win.remove(); focusTopWindow(); });
+      minBtn.addEventListener('click', () => minimizeWindow(win));
+      maxBtn.addEventListener('click', () => toggleMaximize(win));
       win.addEventListener('pointerdown', () => { win.style.zIndex = nextZIndex(); focusWindow(win); });
 
       setupDragging(win, header, offsetX, offsetY);
@@ -553,7 +631,7 @@
       const offsetY = 100 + (zIndexCounter % 5) * 30;
       win.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0)`;
 
-      const { header, closeBtn } = buildWindowChrome(`${manifest.name} (v${manifest.version})`);
+      const { header, closeBtn, minBtn, maxBtn } = buildWindowChrome(`${manifest.name} (v${manifest.version})`);
 
       const body = document.createElement('div');
       body.className = 'window-body';
@@ -566,10 +644,19 @@
       desktop.appendChild(win);
       focusWindow(win);
 
-      // Resolve absolute entrypoint relative to manifest URL
+      // Resolve absolute entrypoint relative to manifest URL and re-validate
+      // the protocol — guards against a tampered localStorage entry that
+      // somehow bypassed the initial installManifest() protocol check.
       const resolvedEntrypoint = new URL(manifest.entrypoint, manifestUrl).href;
+      if (!resolvedEntrypoint.startsWith('https://') && !resolvedEntrypoint.startsWith('http://')) {
+        console.error('[Vortex] Rejected unsafe entrypoint protocol:', resolvedEntrypoint);
+        win.remove();
+        return;
+      }
 
-      const harness = new PluginHarness(manifest, resolvedEntrypoint);
+      // Pass the shared storageEngine so all PluginHarness instances and the
+      // OrchestratorAgent serialize writes against the same per-path write chain.
+      const harness = new PluginHarness(manifest, resolvedEntrypoint, undefined, storageEngine);
       harness.mount(body);
 
       closeBtn.addEventListener('click', () => {
@@ -577,6 +664,8 @@
         win.remove();
         focusTopWindow();
       });
+      minBtn.addEventListener('click', () => minimizeWindow(win));
+      maxBtn.addEventListener('click', () => toggleMaximize(win));
 
       // VORTEX-104: surface the plugin launch as a system trigger.
       systemBus.emit(SystemEvents.APP_LAUNCH, { app: manifest.id, name: manifest.name, kind: 'plugin' });
@@ -655,6 +744,24 @@
     }
     updateClock();
     setInterval(updateClock, 10000);
+
+    // Live FPS meter: count rAF callbacks over a rolling 1s window so the
+    // reading reflects the browser's true paint cadence, not a fixed timer.
+    const fpsEl = document.getElementById('menu-fps');
+    let frameCount = 0;
+    let fpsWindowStart = performance.now();
+    function fpsLoop(now) {
+      frameCount++;
+      const elapsed = now - fpsWindowStart;
+      if (elapsed >= 1000) {
+        const fps = Math.round((frameCount * 1000) / elapsed);
+        fpsEl.textContent = `${fps} FPS`;
+        frameCount = 0;
+        fpsWindowStart = now;
+      }
+      requestAnimationFrame(fpsLoop);
+    }
+    requestAnimationFrame(fpsLoop);
 
     // Initial render call on startup
     renderInstalledApps();

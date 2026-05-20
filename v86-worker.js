@@ -1,0 +1,101 @@
+// v86-worker.js (English Coding Only)
+//
+// VORTEX-101: Standalone Web Worker wrapper that boots a v86 WebAssembly x86
+// VM (e.g. minimal Alpine Linux) off the browser's UI thread. It speaks the
+// BOOT_EMULATOR / SERIAL_IN / SERIAL_OUT message contract with V86LinuxBridge
+// over postMessage.
+//
+// Required runtime resources (supplied via the BOOT_EMULATOR payload):
+//   libUrl      - v86 library script (libv86.js)
+//   wasmPath    - v86 WebAssembly binary (v86.wasm)
+//   biosUrl     - SeaBIOS image
+//   vgaBiosUrl  - VGA BIOS image
+//   imageUrl    - bootable disk image (e.g. Alpine Linux)
+//
+// These binaries are NOT bundled in the repository. When any is missing the
+// worker reports a clear BOOT_ERROR rather than failing silently.
+
+let emulator = null;
+
+function reportError(message) {
+  self.postMessage({ type: 'BOOT_ERROR', data: message });
+}
+
+function bootEmulator(resources) {
+  if (emulator) {
+    reportError('Emulator already booted; ignoring duplicate BOOT_EMULATOR.');
+    return;
+  }
+
+  // Load the v86 library. A missing libv86.js throws synchronously here.
+  try {
+    self.importScripts(resources.libUrl);
+  } catch (err) {
+    reportError(
+      `Cannot load the v86 library from "${resources.libUrl}". ` +
+      `Provide libv86.js and v86.wasm to enable the Linux VM. (${err.message})`
+    );
+    return;
+  }
+
+  const V86Class = self.V86 || self.V86Starter;
+  if (typeof V86Class !== 'function') {
+    reportError('v86 library loaded but no V86 constructor was exported.');
+    return;
+  }
+
+  try {
+    emulator = new V86Class({
+      wasm_path: resources.wasmPath,
+      bios: { url: resources.biosUrl },
+      vga_bios: { url: resources.vgaBiosUrl },
+      hda: { url: resources.imageUrl },
+      autostart: true,
+      disable_keyboard: true,
+      disable_mouse: true,
+      uart0: true
+    });
+  } catch (err) {
+    emulator = null;
+    reportError(`Failed to construct the v86 emulator: ${err.message}`);
+    return;
+  }
+
+  // Pipe Serial Out (stdout) bytes from the VM back to the bridge so the
+  // terminal window can render them in real time.
+  emulator.add_listener('serial0-output-byte', (byte) => {
+    self.postMessage({ type: 'SERIAL_OUT', data: String.fromCharCode(byte) });
+  });
+
+  // Surface a download failure of any resource (BIOS / disk image) clearly.
+  emulator.add_listener('download-error', (detail) => {
+    const file = detail && detail.file_name ? detail.file_name : 'unknown resource';
+    reportError(`Failed to download VM resource "${file}".`);
+  });
+
+  emulator.add_listener('emulator-ready', () => {
+    self.postMessage({ type: 'BOOT_READY' });
+  });
+
+  self.postMessage({ type: 'BOOT_STARTED' });
+}
+
+self.onmessage = (event) => {
+  const { action, payload, data } = event.data || {};
+
+  switch (action) {
+    case 'BOOT_EMULATOR':
+      bootEmulator(payload || {});
+      break;
+
+    case 'SERIAL_IN':
+      // Route keystrokes (stdin) straight to the emulator's serial port.
+      if (emulator) {
+        emulator.serial0_send(data);
+      }
+      break;
+
+    default:
+      reportError(`Unknown worker action: ${action}`);
+  }
+};
