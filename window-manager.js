@@ -8,9 +8,10 @@
 class WindowManager {
   // `desktop` is the element new windows are appended to; `dock` receives the
   // tiles minimized windows collapse into. Both are injected, not looked up.
-  constructor({ desktop, dock }) {
+  constructor({ desktop, dock, onChange = null }) {
     this.desktop = desktop;
     this.dock = dock;
+    this.onChange = onChange;
     this.windows = [];   // open window nodes (incl. minimized), creation order
     this._zIndex = 10;
   }
@@ -50,6 +51,7 @@ class WindowManager {
     this._setupDragging(win, header, offsetX, offsetY);
     this.windows.push(win);
     this.focus(win);
+    this._notifyChange();
     return win;
   }
 
@@ -57,6 +59,7 @@ class WindowManager {
   focus(win) {
     this.windows.forEach(w => w.classList.remove('focused'));
     win.classList.add('focused');
+    this._notifyChange();
   }
 
   // Minimize `win` into the Dock. The window stays in `this.windows` (it is
@@ -72,13 +75,28 @@ class WindowManager {
     tile.title = title;
     tile.textContent = '🪟';
     tile.addEventListener('click', () => {
-      win.style.display = '';
-      tile.remove();
-      win.style.zIndex = this._nextZIndex();
-      this.focus(win);
+      this.restore(win);
     });
+    win._dockTile = tile;
     this.dock.appendChild(tile);
     this._focusTop();
+    this._notifyChange();
+  }
+
+  // Restore a hidden/minimized window and move it to the front.
+  restore(win) {
+    if (!this.windows.includes(win)) return null;
+    if (win.style.display === 'none') {
+      win.style.display = '';
+    }
+    if (win._dockTile) {
+      win._dockTile.remove();
+      win._dockTile = null;
+    }
+    win.style.zIndex = this._nextZIndex();
+    this.focus(win);
+    this._notifyChange();
+    return win;
   }
 
   // Toggle `win` between its geometry and filling the desktop. Pre-maximize
@@ -101,6 +119,7 @@ class WindowManager {
       win.style.height = '100%';
       win.classList.add('maximized');
     }
+    this._notifyChange();
   }
 
   // Allocate the next stacking z-index. Resets all windows to a low sequential
@@ -127,10 +146,21 @@ class WindowManager {
   // so `this.windows` never holds a detached node.
   _close(win, cleanup) {
     if (typeof cleanup === 'function') cleanup();
+    if (win._dockTile) {
+      win._dockTile.remove();
+      win._dockTile = null;
+    }
     win.remove();
     const i = this.windows.indexOf(win);
     if (i !== -1) this.windows.splice(i, 1);
     this._focusTop();
+    this._notifyChange();
+  }
+
+  _notifyChange() {
+    if (typeof this.onChange === 'function') {
+      this.onChange(this.windows.slice());
+    }
   }
 
   // Build the window chrome (header + traffic-light buttons) with DOM APIs so

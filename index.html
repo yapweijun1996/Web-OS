@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self';">
+  <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://kb.yapweijun1996.com https:; frame-src 'self' http: https:; worker-src 'self' blob:;">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <title>Vortex OS - Vanilla Web Operating System</title>
   <style>
     :root {
@@ -117,6 +118,53 @@
       background: rgba(255, 255, 255, 0.12);
     }
 
+    .context-panel {
+      position: fixed;
+      min-width: 210px;
+      padding: 5px;
+      background: rgba(40, 40, 42, 0.86);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 7px;
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.58);
+      z-index: 10002;
+    }
+
+    .context-panel[hidden] { display: none; }
+
+    .context-panel-item {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      min-height: 26px;
+      padding: 5px 10px;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      font-size: 13px;
+      text-align: left;
+      white-space: nowrap;
+      cursor: default;
+    }
+
+    .context-panel-item:hover,
+    .context-panel-item:focus-visible {
+      outline: none;
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .context-panel-sep {
+      height: 1px;
+      margin: 5px 8px;
+      background: rgba(255, 255, 255, 0.12);
+    }
+
     /* Desktop Wallpaper & Icons Grid (icons fill from the top-right, macOS-style) */
     #desktop {
       flex: 1;
@@ -166,10 +214,12 @@
     #dock-container {
       position: relative;
       z-index: 100;
+      width: 100%;
       flex-shrink: 0;
       display: flex;
       justify-content: center;
-      padding: 0 0 6px;
+      padding: 0 8px 6px;
+      pointer-events: none;
     }
 
     #dock {
@@ -177,12 +227,14 @@
       align-items: flex-end;
       gap: 4px;
       padding: 6px;
+      max-width: 100%;
       background: var(--dock);
       backdrop-filter: blur(24px) saturate(180%);
       -webkit-backdrop-filter: blur(24px) saturate(180%);
       border: 1px solid rgba(255, 255, 255, 0.18);
       border-radius: 20px;
       box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      pointer-events: auto;
     }
 
     .dock-app {
@@ -193,12 +245,35 @@
       justify-content: center;
       font-size: 34px;
       border-radius: 13px;
+      border: 0;
+      padding: 0;
+      position: relative;
+      background: transparent;
+      color: inherit;
       cursor: pointer;
       transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
       transform-origin: bottom center;
+      appearance: none;
+      -webkit-appearance: none;
     }
 
     .dock-app:hover { transform: scale(1.35) translateY(-6px); }
+    .dock-app.active::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      bottom: 3px;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.88);
+      transform: translateX(-50%);
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.55);
+    }
+    .dock-app:focus-visible {
+      outline: 2px solid rgba(255, 255, 255, 0.85);
+      outline-offset: 3px;
+    }
     .dock-app:active { transform: scale(1.1) translateY(-2px); }
 
     .dock-divider {
@@ -340,7 +415,9 @@
     #add-app-modal p, #settings-modal p { font-size: 12px; color: var(--text-dim); margin: 0 0 14px; }
 
     #manifest-url-input,
-    #cors-proxy-input {
+    #cors-proxy-input,
+    #kb-id-input,
+    #kb-api-key-input {
       width: 100%;
       padding: 8px 10px;
       background: rgba(0, 0, 0, 0.35);
@@ -352,11 +429,33 @@
     }
 
     #manifest-url-input:focus,
-    #cors-proxy-input:focus {
+    #cors-proxy-input:focus,
+    #kb-id-input:focus,
+    #kb-api-key-input:focus {
       outline: none;
       border-color: var(--accent);
       box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3);
     }
+
+    .settings-label {
+      display: block;
+      margin: 12px 0 6px;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .settings-status {
+      min-height: 18px;
+      margin: -8px 0 14px;
+      color: var(--text-dim);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .settings-status.ok { color: #8fd694; }
+    .settings-status.warn { color: #f9c74f; }
+    .settings-status.error { color: #ff8a80; }
 
     .settings-warning {
       font-size: 11px;
@@ -423,10 +522,25 @@
 
   <!-- Desktop Icons -->
   <div id="desktop">
-    <div class="desktop-icon" onclick="openWindow('Storage Tests', 'test.html')">
+    <div class="desktop-icon" data-open-src="test.html">
       <span class="icon-img">🧪</span>
       <span class="icon-label">Storage Tests</span>
     </div>
+    <div class="desktop-icon" data-open-src="notes.html">
+      <span class="icon-img">✍️</span>
+      <span class="icon-label">Vortex Notes</span>
+    </div>
+  </div>
+
+  <div id="desktop-context-panel" class="context-panel" role="menu" hidden>
+    <button type="button" class="context-panel-item" role="menuitem" data-context-action="new-plugin">New Plugin App...</button>
+    <button type="button" class="context-panel-item" role="menuitem" data-context-action="storage-tests">Open Storage Tests</button>
+    <button type="button" class="context-panel-item" role="menuitem" data-context-action="terminal">Open Terminal</button>
+    <button type="button" class="context-panel-item" role="menuitem" data-context-action="monitor">Open Activity Monitor</button>
+    <button type="button" class="context-panel-item" role="menuitem" data-context-action="notes">Open Vortex Notes</button>
+    <div class="context-panel-sep" role="separator"></div>
+    <button type="button" class="context-panel-item" role="menuitem" data-context-action="refresh">Refresh Desktop</button>
+    <button type="button" class="context-panel-item" role="menuitem" data-context-action="settings">System Settings...</button>
   </div>
 
   <!-- Add App Modal Dialog -->
@@ -443,25 +557,36 @@
   <!-- Settings Modal Dialog (VORTEX-108) -->
   <div id="settings-modal">
     <h3>Settings</h3>
-    <p>CORS proxy URL — used to fetch plugin manifests from hosts that do not send CORS headers. Leave blank to disable.</p>
-    <input type="text" id="cors-proxy-input" placeholder="https://your-proxy.example.com/?url=">
-    <div class="settings-warning">
-      Only point this at a proxy you host and trust. A proxy can substitute manifest content; manifests are still sanitized after fetching, but a hostile proxy widens the attack surface.
-    </div>
-    <div class="modal-actions">
-      <button id="cancel-settings-btn" class="btn btn-secondary">Cancel</button>
-      <button id="save-settings-btn" class="btn btn-primary">Save</button>
-    </div>
+    <form id="settings-form">
+      <p>KB-MCP configuration for sandboxed apps that request knowledge-base access.</p>
+      <label class="settings-label" for="kb-id-input">KB ID</label>
+      <input type="text" id="kb-id-input" name="kb-id" placeholder="Knowledge base UUID" autocomplete="off">
+      <label class="settings-label" for="kb-api-key-input">KB API Key</label>
+      <input type="password" id="kb-api-key-input" name="kb-api-key" placeholder="Leave blank to keep saved key" autocomplete="current-password">
+      <div class="settings-status" id="kb-settings-status" role="status"></div>
+      <div class="modal-actions" style="margin-bottom: 16px;">
+        <button type="button" id="check-kb-settings-btn" class="btn btn-secondary">Check KB</button>
+      </div>
+      <p>CORS proxy URL — used to fetch plugin manifests from hosts that do not send CORS headers. Leave blank to disable.</p>
+      <input type="text" id="cors-proxy-input" name="cors-proxy" placeholder="https://your-proxy.example.com/?url=">
+      <div class="settings-warning">
+        Only point this at a proxy you host and trust. A proxy can substitute manifest content; manifests are still sanitized after fetching, but a hostile proxy widens the attack surface.
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="cancel-settings-btn" class="btn btn-secondary">Cancel</button>
+        <button type="button" id="save-settings-btn" class="btn btn-primary">Save</button>
+      </div>
+    </form>
   </div>
 
   <!-- Dock -->
   <div id="dock-container">
     <div id="dock">
-      <div class="dock-app" title="Dashboard">🌌</div>
-      <div class="dock-app" title="Files">📂</div>
-      <div class="dock-app" title="Terminal" onclick="openWindow('Terminal', 'terminal.html')">💻</div>
+      <button type="button" class="dock-app" id="dashboard-dock-btn" title="Dashboard" aria-label="Open Dashboard">🌌</button>
+      <button type="button" class="dock-app" id="files-dock-btn" title="Files" aria-label="Open Files">📂</button>
+      <button type="button" class="dock-app" id="terminal-dock-btn" title="Terminal" aria-label="Open Terminal">💻</button>
       <div class="dock-divider"></div>
-      <div class="dock-app" id="add-app-dock-btn" title="Add Sandboxed App">➕</div>
+      <button type="button" class="dock-app" id="add-app-dock-btn" title="Add Sandboxed App" aria-label="Add Sandboxed App">➕</button>
     </div>
   </div>
 
@@ -472,8 +597,9 @@
     import { SystemEventBus, OrchestratorAgent } from './agent-core.js';
     import { SystemEvents } from './contracts.js';
     import { CapabilitySet } from './capability.js';
+    import { WindowManager } from './window-manager.js';
+    import { KBProxy } from './kb-proxy.js';
 
-    let zIndexCounter = 10;
     let installedApps = loadInstalledApps();
 
     // Re-run the full sanitizeManifest pipeline on every stored entry so a
@@ -497,108 +623,6 @@
       } catch {
         return [];
       }
-    }
-
-    // Prevents unbounded z-index growth: reset all open windows to sequential
-    // values once the counter approaches the CSS safe limit.
-    function nextZIndex() {
-      if (zIndexCounter >= 9000) {
-        const wins = [...document.querySelectorAll('.window')];
-        wins.forEach((w, i) => { w.style.zIndex = 10 + i; });
-        zIndexCounter = 10 + wins.length - 1;
-      }
-      return ++zIndexCounter;
-    }
-
-    // Tracks the frontmost window: only the focused window shows full-color
-    // traffic lights, matching macOS active/inactive window chrome.
-    function focusWindow(win) {
-      document.querySelectorAll('.window.focused').forEach(w => w.classList.remove('focused'));
-      win.classList.add('focused');
-    }
-
-    // After a window closes, hand focus to the topmost remaining window.
-    function focusTopWindow() {
-      const wins = [...document.querySelectorAll('.window')]
-        .filter(w => w.style.display !== 'none');
-      if (!wins.length) return;
-      const top = wins.reduce((a, b) =>
-        (Number(b.style.zIndex) || 0) > (Number(a.style.zIndex) || 0) ? b : a);
-      focusWindow(top);
-    }
-
-    // Minimize a window into the Dock: hide it and add a clickable Dock tile
-    // that restores and re-focuses it (macOS minimize-to-Dock behavior).
-    function minimizeWindow(win) {
-      if (win.style.display === 'none') return;
-      const title = win.querySelector('.window-title').textContent;
-      win.style.display = 'none';
-      win.classList.remove('focused');
-
-      const tile = document.createElement('div');
-      tile.className = 'dock-app dock-min-tile';
-      tile.title = title;
-      tile.textContent = '🪟';
-      tile.addEventListener('click', () => {
-        win.style.display = '';
-        tile.remove();
-        win.style.zIndex = nextZIndex();
-        focusWindow(win);
-      });
-      document.getElementById('dock').appendChild(tile);
-      focusTopWindow();
-    }
-
-    // Toggle a window between its current geometry and filling the desktop.
-    // Pre-maximize geometry is stashed on the element so restore is exact.
-    function toggleMaximize(win) {
-      if (win.classList.contains('maximized')) {
-        const s = win._restoreState || {};
-        win.style.transform = s.transform || 'translate3d(60px, 60px, 0)';
-        win.style.width = s.width || '';
-        win.style.height = s.height || '';
-        win.classList.remove('maximized');
-      } else {
-        win._restoreState = {
-          transform: win.style.transform,
-          width: win.style.width,
-          height: win.style.height
-        };
-        win.style.transform = 'translate3d(0px, 0px, 0)';
-        win.style.width = '100%';
-        win.style.height = '100%';
-        win.classList.add('maximized');
-      }
-    }
-
-    // Build the window chrome (header + traffic-light buttons) using DOM APIs so
-    // title text is assigned via textContent — never via innerHTML — preventing
-    // XSS from manifest metadata injecting markup into the host page.
-    // Controls render left-of-title in macOS order: close, minimize, maximize.
-    function buildWindowChrome(titleText) {
-      const header = document.createElement('div');
-      header.className = 'window-header';
-
-      const titleEl = document.createElement('div');
-      titleEl.className = 'window-title';
-      titleEl.textContent = titleText;
-
-      const controls = document.createElement('div');
-      controls.className = 'window-controls';
-
-      ['win-close', 'win-min', 'win-max'].forEach(cls => {
-        const btn = document.createElement('button');
-        btn.className = `win-btn ${cls}`;
-        controls.appendChild(btn);
-      });
-
-      header.append(controls, titleEl);
-      return {
-        header,
-        closeBtn: controls.querySelector('.win-close'),
-        minBtn: controls.querySelector('.win-min'),
-        maxBtn: controls.querySelector('.win-max')
-      };
     }
 
     // Non-blocking status feedback — replaces alert() so the install dialog
@@ -641,10 +665,14 @@
       if (document.hidden) storageEngine.flushAll();
     });
 
-    // Kernel introspection surface (read access for the console / system apps).
+    // Kernel introspection surface — intentionally narrow.
+    // `bus` and `storage` are NOT exposed: direct access bypasses the
+    // capability model and would let any same-origin console script or XSS
+    // payload read all VFS data or inject arbitrary events without a token.
     window.vortexKernel = {
-      bus: systemBus,
-      storage: storageEngine,
+      getProcessTelemetry() {
+        return wm.getProcessTelemetry();
+      },
       get orchestrator() { return orchestrator; },
       // VORTEX-105: runtime KB config without redeployment.
       // Usage: window.vortexKernel.configureKb({ apiKey: 'YOUR_KEY', kbId: 'YOUR_KB_ID' })
@@ -655,101 +683,91 @@
       }
     };
 
-    // Setup dragging logic with GPU Hardware Acceleration
-    function setupDragging(win, header, initialX, initialY) {
-      let isDragging = false;
-      let startX, startY;
-      let currentX = initialX, currentY = initialY;
+    // The Window Management System owns every open window: stacking, focus,
+    // minimize-to-Dock, maximize, and drag (see window-manager.js).
+    const DOCK_APP_TARGETS = [
+      { buttonId: 'dashboard-dock-btn', src: 'dashboard.html' },
+      { buttonId: 'files-dock-btn', src: 'files.html' },
+      { buttonId: 'terminal-dock-btn', src: 'terminal.html' }
+    ];
 
-      header.addEventListener('pointerdown', (e) => {
-        if (win.classList.contains('maximized')) return;
-        isDragging = true;
-        startX = e.clientX - currentX;
-        startY = e.clientY - currentY;
-        header.setPointerCapture(e.pointerId);
-      });
-
-      header.addEventListener('pointermove', (e) => {
-        if (!isDragging) return;
-        currentX = e.clientX - startX;
-        currentY = e.clientY - startY;
-        win.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
-      });
-
-      header.addEventListener('pointerup', (e) => {
-        isDragging = false;
-        header.releasePointerCapture(e.pointerId);
-      });
+    function updateDockIndicators() {
+      for (const { buttonId, src } of DOCK_APP_TARGETS) {
+        const button = document.getElementById(buttonId);
+        const isActive = wm.windows.some((win) => {
+          const iframe = win.querySelector('iframe');
+          return iframe && iframe.getAttribute('src') === src;
+        });
+        button?.classList.toggle('active', isActive);
+        button?.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
     }
 
-    // Standard Window Opener for normal frames
+    const wm = new WindowManager({
+      desktop: document.getElementById('desktop'),
+      dock: document.getElementById('dock'),
+      onChange: updateDockIndicators
+    });
+
+    // Standard Window Opener: a system iframe pointed at a same-origin page.
     window.openWindow = function(title, src) {
-      const desktop = document.getElementById('desktop');
-
-      const win = document.createElement('div');
-      win.className = 'window';
-      win.style.zIndex = nextZIndex();
-
-      const offsetX = 60 + (zIndexCounter % 5) * 30;
-      const offsetY = 60 + (zIndexCounter % 5) * 30;
-      win.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0)`;
-
-      const { header, closeBtn, minBtn, maxBtn } = buildWindowChrome(title);
-
-      const body = document.createElement('div');
-      body.className = 'window-body';
-
-      const iframe = document.createElement('iframe');
-      // Defense-in-depth: sandbox system-app iframes to prevent navigation
-      // hijack, popup creation, and other unrestricted behaviors.
-      iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-modals');
-      iframe.src = src;
-      body.appendChild(iframe);
-
-      win.append(header, body);
-
-      closeBtn.addEventListener('click', () => { win.remove(); focusTopWindow(); });
-      minBtn.addEventListener('click', () => minimizeWindow(win));
-      maxBtn.addEventListener('click', () => toggleMaximize(win));
-      win.addEventListener('pointerdown', () => { win.style.zIndex = nextZIndex(); focusWindow(win); });
-
-      setupDragging(win, header, offsetX, offsetY);
-      desktop.appendChild(win);
-      focusWindow(win);
-
+      const win = wm.open({
+        title,
+        fillBody(body) {
+          const iframe = document.createElement('iframe');
+          // Trusted same-origin system apps run unsandboxed. Sandboxing them
+          // with allow-scripts + allow-same-origin triggers Chrome's escape
+          // warning; third-party plugins remain sandboxed in PluginHarness.
+          iframe.src = src;
+          body.appendChild(iframe);
+        }
+      });
+      win.dataset.appSrc = src;
+      updateDockIndicators();
       // VORTEX-104: surface the launch as a system trigger on the event bus.
       systemBus.emit(SystemEvents.APP_LAUNCH, { title, src, kind: 'system' });
+      return win;
     };
 
-    // Advanced Window Opener for Sandboxed Plugins
+    function focusSystemWindow(src) {
+      const win = wm.windows.find((candidate) => candidate.dataset.appSrc === src);
+      if (!win) return false;
+      wm.restore(win);
+      updateDockIndicators();
+      return true;
+    }
+
+    function openOrFocusSystemWindow(title, src) {
+      if (focusSystemWindow(src)) return;
+      window.openWindow(title, src);
+    }
+
+    function openDashboard() {
+      openOrFocusSystemWindow('Dashboard', 'dashboard.html');
+    }
+
+    function openFiles() {
+      openOrFocusSystemWindow('Files', 'files.html');
+    }
+
+    function openTerminal() {
+      openOrFocusSystemWindow('Terminal', 'terminal.html');
+    }
+
+    function openMonitor() {
+      window.openWindow('Activity Monitor', 'monitor.html');
+    }
+
+    function openNotes() {
+      window.openWindow('Vortex Notes', 'notes.html');
+    }
+
+    // Advanced Window Opener for Sandboxed Plugins.
     window.launchPlugin = function(manifest, manifestUrl) {
-      const desktop = document.getElementById('desktop');
-      const win = document.createElement('div');
-      win.className = 'window';
-      win.style.zIndex = nextZIndex();
-
-      const offsetX = 100 + (zIndexCounter % 5) * 30;
-      const offsetY = 100 + (zIndexCounter % 5) * 30;
-      win.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0)`;
-
-      const { header, closeBtn, minBtn, maxBtn } = buildWindowChrome(`${manifest.name} (v${manifest.version})`);
-
-      const body = document.createElement('div');
-      body.className = 'window-body';
-
-      win.append(header, body);
-
-      win.addEventListener('pointerdown', () => { win.style.zIndex = nextZIndex(); focusWindow(win); });
-
-      setupDragging(win, header, offsetX, offsetY);
-      desktop.appendChild(win);
-      focusWindow(win);
-
       // Re-validate the manifest origin at launch time so a manipulated
       // localStorage entry with a swapped manifestUrl cannot slip through.
       if (!isOriginAllowed(manifestUrl)) {
         console.error('[Vortex] Rejected plugin with untrusted manifestUrl at launch:', manifestUrl);
-        win.remove();
         return;
       }
 
@@ -760,22 +778,19 @@
       const resolvedEntrypoint = new URL(manifest.entrypoint, manifestUrl).href;
       if (!resolvedEntrypoint.startsWith('https://') && !resolvedEntrypoint.startsWith('http://')) {
         console.error('[Vortex] Rejected unsafe entrypoint protocol:', resolvedEntrypoint);
-        win.remove();
         return;
       }
 
-      // Pass the shared storageEngine so all PluginHarness instances and the
-      // OrchestratorAgent serialize writes against the same per-path write chain.
-      const harness = new PluginHarness(manifest, resolvedEntrypoint, undefined, storageEngine);
-      harness.mount(body);
-
-      closeBtn.addEventListener('click', () => {
-        harness.destroy();
-        win.remove();
-        focusTopWindow();
+      wm.open({
+        title: `${manifest.name} (v${manifest.version})`,
+        fillBody(body) {
+          // Pass the shared storageEngine so all PluginHarness instances and the
+          // OrchestratorAgent serialize writes on the same per-path write chain.
+          const harness = new PluginHarness(manifest, resolvedEntrypoint, undefined, storageEngine);
+          harness.mount(body);
+          return () => harness.destroy();
+        }
       });
-      minBtn.addEventListener('click', () => minimizeWindow(win));
-      maxBtn.addEventListener('click', () => toggleMaximize(win));
 
       // VORTEX-104: surface the plugin launch as a system trigger.
       systemBus.emit(SystemEvents.APP_LAUNCH, { app: manifest.id, name: manifest.name, kind: 'plugin' });
@@ -806,15 +821,23 @@
 
     // Modal control helper
     const modal = document.getElementById('add-app-modal');
+    const dashboardDockBtn = document.getElementById('dashboard-dock-btn');
+    const filesDockBtn = document.getElementById('files-dock-btn');
+    const terminalDockBtn = document.getElementById('terminal-dock-btn');
     const addDockBtn = document.getElementById('add-app-dock-btn');
     const cancelModalBtn = document.getElementById('cancel-modal-btn');
     const installAppBtn = document.getElementById('install-app-btn');
     const manifestInput = document.getElementById('manifest-url-input');
 
-    addDockBtn.addEventListener('click', () => {
+    function openAddAppModal() {
       modal.style.display = 'block';
       manifestInput.value = window.location.origin + '/manifest.json';
-    });
+    }
+
+    dashboardDockBtn.addEventListener('click', openDashboard);
+    filesDockBtn.addEventListener('click', openFiles);
+    terminalDockBtn.addEventListener('click', openTerminal);
+    addDockBtn.addEventListener('click', openAddAppModal);
 
     cancelModalBtn.addEventListener('click', () => {
       modal.style.display = 'none';
@@ -846,11 +869,58 @@
     // plugin-installer.js falls back to when a manifest host lacks CORS headers.
     const settingsModal = document.getElementById('settings-modal');
     const corsProxyInput = document.getElementById('cors-proxy-input');
+    const kbIdInput = document.getElementById('kb-id-input');
+    const kbApiKeyInput = document.getElementById('kb-api-key-input');
+    const kbSettingsStatus = document.getElementById('kb-settings-status');
+    const checkKbSettingsBtn = document.getElementById('check-kb-settings-btn');
     const cancelSettingsBtn = document.getElementById('cancel-settings-btn');
     const saveSettingsBtn = document.getElementById('save-settings-btn');
 
+    function getKbSettingsState() {
+      return {
+        hasKey: Boolean(localStorage.getItem('vortex_kb_api_key')),
+        hasKbId: Boolean((localStorage.getItem('vortex_kb_id') || '').trim())
+      };
+    }
+
+    function setKbSettingsStatus(message, level = 'warn') {
+      kbSettingsStatus.textContent = message;
+      kbSettingsStatus.className = `settings-status ${level}`;
+    }
+
+    function updateKbSettingsStatus() {
+      const { hasKey, hasKbId } = getKbSettingsState();
+      if (!hasKey && !hasKbId) {
+        setKbSettingsStatus('KB-MCP is not configured: missing KB ID and API key.', 'warn');
+      } else if (!hasKbId) {
+        setKbSettingsStatus('KB-MCP is missing a KB ID.', 'warn');
+      } else if (!hasKey) {
+        setKbSettingsStatus('KB-MCP is missing an API key.', 'warn');
+      } else {
+        setKbSettingsStatus('KB-MCP is configured. Saved key is hidden.', 'ok');
+      }
+    }
+
+    function saveKbSettings() {
+      const kbId = kbIdInput.value.trim();
+      const apiKey = kbApiKeyInput.value.trim();
+      if (kbId) {
+        localStorage.setItem('vortex_kb_id', kbId);
+      } else {
+        localStorage.removeItem('vortex_kb_id');
+      }
+      if (apiKey) {
+        localStorage.setItem('vortex_kb_api_key', apiKey);
+      }
+      kbApiKeyInput.value = '';
+      updateKbSettingsStatus();
+    }
+
     function openSettings() {
       corsProxyInput.value = localStorage.getItem('vortex_cors_proxy_url') || '';
+      kbIdInput.value = localStorage.getItem('vortex_kb_id') || '';
+      kbApiKeyInput.value = '';
+      updateKbSettingsStatus();
       settingsModal.style.display = 'block';
     }
 
@@ -860,12 +930,139 @@
 
     saveSettingsBtn.addEventListener('click', () => {
       const value = corsProxyInput.value.trim();
+      saveKbSettings();
       if (value) {
         localStorage.setItem('vortex_cors_proxy_url', value);
       } else {
         localStorage.removeItem('vortex_cors_proxy_url');
       }
       settingsModal.style.display = 'none';
+    });
+
+    checkKbSettingsBtn.addEventListener('click', async () => {
+      saveKbSettings();
+      const { hasKey, hasKbId } = getKbSettingsState();
+      if (!hasKbId) {
+        setKbSettingsStatus('KB-MCP check skipped: missing KB ID.', 'warn');
+        return;
+      }
+      if (!hasKey) {
+        setKbSettingsStatus('KB-MCP check skipped: missing API key.', 'warn');
+        return;
+      }
+
+      checkKbSettingsBtn.disabled = true;
+      setKbSettingsStatus('Checking KB-MCP connection...', 'warn');
+      try {
+        await new KBProxy().read('vortex settings health check');
+        setKbSettingsStatus('KB-MCP check passed.', 'ok');
+      } catch (err) {
+        setKbSettingsStatus(`KB-MCP request failed: ${err.message}`, 'error');
+      } finally {
+        checkKbSettingsBtn.disabled = false;
+      }
+    });
+
+    // ---- Desktop context panel ----
+    const desktopEl = document.getElementById('desktop');
+    const desktopContextPanel = document.getElementById('desktop-context-panel');
+
+    function closeDesktopContextPanel() {
+      desktopContextPanel.hidden = true;
+    }
+
+    function openDesktopContextPanel(x, y) {
+      closeMenu();
+      desktopContextPanel.hidden = false;
+
+      const panelRect = desktopContextPanel.getBoundingClientRect();
+      const left = Math.min(x, window.innerWidth - panelRect.width - 8);
+      const top = Math.min(y, window.innerHeight - panelRect.height - 8);
+      desktopContextPanel.style.left = `${Math.max(8, left)}px`;
+      desktopContextPanel.style.top = `${Math.max(8, top)}px`;
+      desktopContextPanel.querySelector('.context-panel-item')?.focus({ preventScroll: true });
+    }
+
+    function getDesktopContextItems() {
+      return [...desktopContextPanel.querySelectorAll('.context-panel-item:not([disabled])')];
+    }
+
+    function focusDesktopContextItem(index) {
+      const items = getDesktopContextItems();
+      if (!items.length) return;
+
+      const nextIndex = (index + items.length) % items.length;
+      items[nextIndex].focus({ preventScroll: true });
+    }
+
+    function moveDesktopContextFocus(delta) {
+      const items = getDesktopContextItems();
+      if (!items.length) return;
+
+      const currentIndex = items.indexOf(document.activeElement);
+      focusDesktopContextItem(currentIndex === -1 ? 0 : currentIndex + delta);
+    }
+
+    function handleDesktopContextPanelKeydown(e) {
+      if (desktopContextPanel.hidden) return false;
+
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          moveDesktopContextFocus(1);
+          return true;
+        case 'ArrowUp':
+          e.preventDefault();
+          moveDesktopContextFocus(-1);
+          return true;
+        case 'Home':
+          e.preventDefault();
+          focusDesktopContextItem(0);
+          return true;
+        case 'End':
+          e.preventDefault();
+          focusDesktopContextItem(getDesktopContextItems().length - 1);
+          return true;
+        default:
+          return false;
+      }
+    }
+
+    desktopEl.addEventListener('contextmenu', (e) => {
+      if (e.target.closest('.window')) return;
+      e.preventDefault();
+      openDesktopContextPanel(e.clientX, e.clientY);
+    });
+
+    desktopContextPanel.addEventListener('click', (e) => {
+      const item = e.target.closest('[data-context-action]');
+      if (!item) return;
+
+      closeDesktopContextPanel();
+      switch (item.dataset.contextAction) {
+        case 'new-plugin':
+          openAddAppModal();
+          break;
+        case 'storage-tests':
+          window.openWindow('Storage Tests', 'test.html');
+          break;
+        case 'terminal':
+          openTerminal();
+          break;
+        case 'monitor':
+          openMonitor();
+          break;
+        case 'notes':
+          openNotes();
+          break;
+        case 'refresh':
+          renderInstalledApps();
+          showToast('Desktop refreshed');
+          break;
+        case 'settings':
+          openSettings();
+          break;
+      }
     });
 
     // Live menu bar clock
@@ -918,9 +1115,9 @@
         { label: 'System Settings…', action: openSettings }
       ],
       File: [
-        { label: 'New Plugin App…', action: () => { modal.style.display = 'block'; manifestInput.value = window.location.origin + '/manifest.json'; } },
+        { label: 'New Plugin App…', action: openAddAppModal },
         { separator: true },
-        { label: 'Close Window', shortcut: '⌘W', needsWindow: true, action: () => clickWindowControl('.win-close') }
+        { label: 'Close Window', shortcut: '⌃⌥W', needsWindow: true, action: () => clickWindowControl('.win-close') }
       ],
       Edit: [
         { label: 'Cut', shortcut: '⌘X', action: () => document.execCommand('cut') },
@@ -929,14 +1126,14 @@
         { label: 'Select All', shortcut: '⌘A', action: () => document.execCommand('selectAll') }
       ],
       View: [
-        { label: 'Reload Window', shortcut: '⌘R', needsWindow: true, action: () => { const f = focusedWindow()?.querySelector('iframe'); if (f) f.src = f.src; } },
-        { label: 'Enter Full Screen', needsWindow: true, action: () => { const w = focusedWindow(); if (w) toggleMaximize(w); } }
+        { label: 'Reload Window', shortcut: '⌃⌥R', needsWindow: true, action: () => { const f = focusedWindow()?.querySelector('iframe'); if (f) f.src = f.src; } },
+        { label: 'Enter Full Screen', needsWindow: true, action: () => { const w = focusedWindow(); if (w) wm.toggleMaximize(w); } }
       ],
       Window: [
-        { label: 'Minimize', shortcut: '⌘M', needsWindow: true, action: () => { const w = focusedWindow(); if (w) minimizeWindow(w); } },
-        { label: 'Zoom', needsWindow: true, action: () => { const w = focusedWindow(); if (w) toggleMaximize(w); } },
+        { label: 'Minimize', shortcut: '⌃⌥M', needsWindow: true, action: () => { const w = focusedWindow(); if (w) wm.minimize(w); } },
+        { label: 'Zoom', needsWindow: true, action: () => { const w = focusedWindow(); if (w) wm.toggleMaximize(w); } },
         { separator: true },
-        { label: 'Close', shortcut: '⌘W', needsWindow: true, action: () => clickWindowControl('.win-close') }
+        { label: 'Close', shortcut: '⌃⌥W', needsWindow: true, action: () => clickWindowControl('.win-close') }
       ],
       Help: [
         { label: 'Vortex OS Help', action: () => alert('Vortex OS Help\n\n• Click a desktop icon or Dock app to open a window.\n• Traffic lights: red closes, yellow minimizes to the Dock, green zooms.\n• Drag a window by its title bar.\n• Use the + button in the Dock to install a sandboxed plugin.') }
@@ -1010,8 +1207,28 @@
       });
     });
 
-    document.addEventListener('click', closeMenu);
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
+    // Wire static desktop icons declared with data-open-src — avoids inline
+    // onclick attributes which are blocked by script-src 'self'.
+    document.getElementById('desktop').addEventListener('click', (e) => {
+      const icon = e.target.closest('[data-open-src]');
+      if (!icon) return;
+      const src = icon.dataset.openSrc;
+      const label = icon.querySelector('.icon-label')?.textContent || src;
+      window.openWindow(label, src);
+    });
+
+    document.addEventListener('click', (e) => {
+      closeMenu();
+      if (!desktopContextPanel.contains(e.target)) closeDesktopContextPanel();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (handleDesktopContextPanelKeydown(e)) return;
+
+      if (e.key === 'Escape') {
+        closeMenu();
+        closeDesktopContextPanel();
+      }
+    });
 
   </script>
 </body>

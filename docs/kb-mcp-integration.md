@@ -115,3 +115,17 @@ To ensure the AI Agent always has access to the latest project specifications wi
 - **Path Crawler**: Periodically scans `DESIGN.md`, `README.md`, and all files under `docs/**/*.md`.
 - **Markdown Parser**: Splits documents into distinct sections based on H2 (`##`) headers to fit within standard vector model context windows.
 - **KB Sync Job**: Calls `kb_kb_add_item` (or `kb_kb_update_item` if unchanged) to publish section contents to the `vortex-web-os-project-docs` knowledge base, tagging them with the correct source path.
+
+---
+
+## 5. Chrome DevTools Review Notes - 2026-05-20
+
+The local browser review confirmed that the host-side KB-MCP proxy code is present, capability-gated, and exposed through the plugin IPC path. The follow-up fixes completed the browser setup path:
+
+- The bundled `manifest.json` declares `kb-mcp:read` and `kb-mcp:write`.
+- The manifest permission validator accepts hyphenated capability namespaces such as `kb-mcp:read` while still rejecting malformed unsafe tokens.
+- Settings exposes KB-MCP configuration for `vortex_kb_id` and `vortex_kb_api_key`.
+- Settings never re-renders the saved raw API key; reopening the panel leaves the key field blank and only reports key presence.
+- The Check KB action reports missing-key, missing-KB, configured, and request-failed states from the user-facing Settings panel.
+
+Remaining operational note: a successful live `kb:read` still requires a valid KB ID and API key in the browser's local storage. Without real credentials, the health check correctly reports a request failure instead of exposing the key or crashing the host page.

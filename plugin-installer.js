@@ -139,6 +139,11 @@ function sanitizeManifest(raw, manifestUrl) {
       if (typeof p !== 'string' || !TOKEN_PATTERN.test(p)) {
         throw new Error(`Manifest contains an invalid permission token: ${JSON.stringify(p)}`);
       }
+      // Block root-scoped FS tokens (fs:write:/ or fs:read:/) — they grant
+      // unrestricted VFS access and defeat path-scope enforcement entirely.
+      if (/^fs:(write|read):\/$/.test(p)) {
+        throw new Error(`Manifest declares a root-scoped FS permission '${p}' which is not allowed.`);
+      }
       return p;
     });
   }

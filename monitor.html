@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Activity Monitor</title>
+  <style>
+    :root {
+      --bg: #1c1c1e;
+      --panel: #2c2c2e;
+      --border: rgba(255, 255, 255, 0.12);
+      --text: #f2f2f7;
+      --text-dim: #8e8e93;
+      --accent: #34c759; /* Green diagnostic accent */
+      --danger: #ff453a;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .live-indicator {
+      font-size: 11px;
+      font-weight: normal;
+      background: rgba(52, 199, 89, 0.15);
+      color: var(--accent);
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid rgba(52, 199, 89, 0.3);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* Diagnostics Header Panel */
+    .dashboard-header {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 15px;
+    }
+
+    .stat-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stat-title {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-size: 20px;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Sparkline Canvas Chart */
+    .chart-container {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 15px;
+      position: relative;
+    }
+
+    .chart-title {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+
+    canvas {
+      width: 100%;
+      height: 60px;
+      display: block;
+    }
+
+    /* Active Processes Table */
+    .table-container {
+      flex: 1;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow-y: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      background: rgba(255, 255, 255, 0.03);
+      font-weight: 600;
+      color: var(--text-dim);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .status-badge {
+      display: inline-block;
+      font-size: 10px;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-weight: bold;
+    }
+
+    .status-active { background: rgba(52, 199, 89, 0.15); color: var(--accent); }
+    .status-minimized { background: rgba(142, 142, 147, 0.15); color: var(--text-dim); }
+    .status-restricted { background: rgba(255, 69, 58, 0.15); color: var(--danger); }
+  </style>
+</head>
+<body>
+
+  <h2>
+    Vortex OS Diagnostics
+    <span class="live-indicator">● LIVE Telemetry</span>
+  </h2>
+
+  <!-- Top Diagnostics Stats -->
+  <div class="dashboard-header">
+    <div class="stat-card">
+      <span class="stat-title">Main Thread</span>
+      <span class="stat-value" id="fps-stat">-- FPS</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-title">Loop Latency</span>
+      <span class="stat-value" id="latency-stat">-- ms</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-title">Total Memory</span>
+      <span class="stat-value" id="memory-stat">-- MB</span>
+    </div>
+  </div>
+
+  <!-- CPU Latency Sparkline Chart -->
+  <div class="chart-container">
+    <div class="chart-title">CPU Event Loop Latency (Last 30s)</div>
+    <canvas id="sparkline" height="60"></canvas>
+  </div>
+
+  <!-- Active Processes Grid -->
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Process / Active Application</th>
+          <th>Status</th>
+          <th>DOM Nodes</th>
+          <th>SOP State</th>
+          <th>IPC Rate</th>
+        </tr>
+      </thead>
+      <tbody id="process-list">
+        <tr>
+          <td colspan="5" style="text-align: center; color: var(--text-dim);">No active processes found.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    const processList = document.getElementById('process-list');
+    const fpsStat = document.getElementById('fps-stat');
+    const latencyStat = document.getElementById('latency-stat');
+    const memoryStat = document.getElementById('memory-stat');
+    const canvas = document.getElementById('sparkline');
+    const ctx = canvas.getContext('2d');
+
+    // Telemetry tracking arrays
+    const latencyHistory = [];
+    const maxDataPoints = 60; // 1 data point per 500ms over 30s
+
+    // 1. High-Performance Frame Latency Monitor (Active Introspection)
+    let lastFrameTime = performance.now();
+    let rAF_Count = 0;
+    let rAF_Start = performance.now();
+    let currentFps = 60;
+    let currentLatency = 0;
+
+    function monitorLoop(now) {
+      rAF_Count++;
+      const delta = now - lastFrameTime;
+      lastFrameTime = now;
+
+      // Compute frame delta offset (latency over standard 16.67ms)
+      const frameThreshold = 1000 / 60;
+      currentLatency = Math.max(0, Math.round(delta - frameThreshold));
+
+      const elapsed = now - rAF_Start;
+      if (elapsed >= 1000) {
+        currentFps = Math.round((rAF_Count * 1000) / elapsed);
+        rAF_Count = 0;
+        rAF_Start = now;
+
+        // Record latency to history
+        latencyHistory.push(currentLatency);
+        if (latencyHistory.length > maxDataPoints) {
+          latencyHistory.shift();
+        }
+
+        drawSparkline();
+        updateDashboardStats();
+      }
+
+      requestAnimationFrame(monitorLoop);
+    }
+    requestAnimationFrame(monitorLoop);
+
+    // Render beautiful 2D hardware-accelerated sparkline chart
+    function drawSparkline() {
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      canvas.width = w;
+      canvas.height = h;
+
+      ctx.clearRect(0, 0, w, h);
+
+      if (latencyHistory.length === 0) return;
+
+      // Draw horizontal baseline
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, h - 2);
+      ctx.lineTo(w, h - 2);
+      ctx.stroke();
+
+      // Plot latency points
+      const stepX = w / (maxDataPoints - 1);
+      const maxVal = Math.max(30, ...latencyHistory, 50); // Scale graph up to at least 50ms
+
+      ctx.strokeStyle = '#34c759';
+      ctx.lineWidth = 1.5;
+      ctx.fillStyle = 'rgba(52, 199, 89, 0.08)';
+
+      ctx.beginPath();
+      latencyHistory.forEach((val, index) => {
+        const x = index * stepX;
+        // Invert Y coordinate so higher latency sits higher on chart
+        const y = h - ((val / maxVal) * (h - 6)) - 3;
+        if (index === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      });
+
+      // Fill area under line
+      const pathLine = new Path2D(ctx);
+      ctx.stroke();
+
+      ctx.lineTo((latencyHistory.length - 1) * stepX, h);
+      ctx.lineTo(0, h);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    function updateDashboardStats() {
+      fpsStat.textContent = `${currentFps} FPS`;
+      latencyStat.textContent = `${currentLatency} ms`;
+      
+      // Memory Telemetry Fallback
+      if (window.performance && window.performance.memory) {
+        const allocatedMb = Math.round(window.performance.memory.usedJSHeapSize / (1024 * 1024));
+        memoryStat.textContent = `${allocatedMb} MB`;
+      } else {
+        memoryStat.textContent = 'N/A';
+      }
+    }
+
+    // 2. Poll WMS Process Telemetry (1Hz passive pulling)
+    async function pollWmsTelemetry() {
+      // Safe guard: check if running inside Vortex OS iframe and kernel is available
+      if (!window.parent || !window.parent.vortexKernel) {
+        processList.innerHTML = `
+          <tr>
+            <td colspan="5" style="text-align: center; color: var(--text-dim);">
+              Isolated Standalone Mode - System Kernel Not Found
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      try {
+        const kernel = window.parent.vortexKernel;
+        const telemetry = kernel.getProcessTelemetry();
+
+        if (!telemetry || telemetry.length === 0) {
+          processList.innerHTML = `
+            <tr>
+              <td colspan="5" style="text-align: center; color: var(--text-dim);">
+                No active processes found on desktop.
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        processList.innerHTML = '';
+        telemetry.forEach(proc => {
+          const row = document.createElement('tr');
+
+          // Process Name
+          const nameTd = document.createElement('td');
+          nameTd.style.fontWeight = '500';
+          nameTd.textContent = proc.title;
+
+          // Status Badge
+          const statusTd = document.createElement('td');
+          const badge = document.createElement('span');
+          badge.className = 'status-badge';
+          if (proc.isMinimized) {
+            badge.className += ' status-minimized';
+            badge.textContent = 'Minimized';
+          } else {
+            badge.className += ' status-active';
+            badge.textContent = proc.isFocused ? 'Focused' : 'Active';
+          }
+          statusTd.appendChild(badge);
+
+          // DOM Elements
+          const domTd = document.createElement('td');
+          domTd.style.fontFamily = 'monospace';
+          domTd.textContent = proc.isCrossOrigin ? '--' : proc.domCount;
+
+          // Same-Origin / Cross-Origin state
+          const sopTd = document.createElement('td');
+          const sopBadge = document.createElement('span');
+          sopBadge.className = 'status-badge';
+          if (proc.isCrossOrigin) {
+            sopBadge.className += ' status-restricted';
+            sopBadge.textContent = 'Cross-Origin (Restricted)';
+          } else {
+            sopBadge.className += ' status-active';
+            sopBadge.textContent = 'Same-Origin';
+          }
+          sopTd.appendChild(sopBadge);
+
+          // IPC throughput rate
+          const ipcTd = document.createElement('td');
+          ipcTd.style.fontFamily = 'monospace';
+          ipcTd.textContent = `${proc.ipcRate} pkts/s`;
+
+          row.append(nameTd, statusTd, domTd, sopTd, ipcTd);
+          processList.appendChild(row);
+        });
+      } catch (err) {
+        console.error('[Telemetry Poller Error]', err);
+      }
+    }
+
+    // Run active telemetry poll immediately, and repeat at 1Hz frequency
+    pollWmsTelemetry();
+    setInterval(pollWmsTelemetry, 1000);
+  </script>
+</body>
+</html>

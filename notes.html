@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vortex Notes</title>
+  <style>
+    :root {
+      --bg: #1c1c1e;
+      --panel: #2c2c2e;
+      --border: rgba(255, 255, 255, 0.12);
+      --text: #f2f2f7;
+      --text-dim: #8e8e93;
+      --accent: #ff9f0a; /* Amber/orange note accent */
+      --success: #34c759;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+    }
+
+    /* Top Toolbar */
+    .toolbar {
+      height: 44px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 15px;
+      flex-shrink: 0;
+    }
+
+    .title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .save-status {
+      font-size: 11px;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: color 0.2s;
+    }
+
+    .save-status.dirty {
+      color: var(--accent);
+    }
+
+    .save-status.saved {
+      color: var(--success);
+    }
+
+    .indicator-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      display: inline-block;
+    }
+
+    .dirty .indicator-dot { background: var(--accent); }
+    .saved .indicator-dot { background: var(--success); }
+
+    /* Main Workspace */
+    .workspace {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    textarea {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      border: none;
+      outline: none;
+      resize: none;
+      color: var(--text);
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- App Header / Toolbar -->
+  <div class="toolbar">
+    <div class="title">✍️ Vortex Debounced Notes</div>
+    <div class="save-status" id="status">
+      <span class="indicator-dot"></span>
+      <span id="status-text">Loading...</span>
+    </div>
+  </div>
+
+  <!-- Writing Canvas -->
+  <div class="workspace">
+    <textarea id="editor" placeholder="Start typing here... Your changes will be automatically debounced (500ms) and saved into the compressed VFS in real-time." disabled></textarea>
+  </div>
+
+  <script>
+    const editor = document.getElementById('editor');
+    const status = document.getElementById('status');
+    const statusText = document.getElementById('status-text');
+    const notePath = '/documents/vortex_notes.jsonl.gz';
+
+    let storage = null;
+    let checkTimer = null;
+
+    // Connect to Vortex OS Kernel Storage Engine
+    function initConnection() {
+      if (!window.parent || !window.parent.vortexKernel) {
+        setOfflineMode();
+        return;
+      }
+
+      storage = window.parent.vortexKernel.storage;
+      loadNote();
+    }
+
+    function setOfflineMode() {
+      status.className = 'save-status';
+      statusText.textContent = 'Isolated Mode (No VFS)';
+      editor.placeholder = "Standalone Mode: Telemetry connection to Vortex kernel not found. Mount this app inside Vortex OS to enjoy debounced transaction savings.";
+      editor.disabled = false;
+    }
+
+    async function loadNote() {
+      statusText.textContent = 'Reading VFS...';
+      try {
+        const records = await storage.readGzFileLines(notePath);
+        if (records && records.length > 0) {
+          // Grab text from the latest appended chunk
+          const latestRecord = records[records.length - 1];
+          if (latestRecord && typeof latestRecord.text === 'string') {
+            editor.value = latestRecord.text;
+          }
+        }
+        status.className = 'save-status saved';
+        statusText.textContent = 'Synchronized with VFS';
+        editor.disabled = false;
+
+        // Set up keystroke listener for debounced save
+        setupEditor();
+      } catch (err) {
+        console.error('[Note Loader Error]', err);
+        statusText.textContent = 'Error loading note';
+        editor.disabled = false;
+      }
+    }
+
+    function setupEditor() {
+      editor.addEventListener('input', (e) => {
+        // Mark status as dirty/saving immediately on keystroke
+        status.className = 'save-status dirty';
+        statusText.textContent = 'Writing to Buffer...';
+
+        // 1. Invoke the debounced VFS Queue line
+        // This buffers the line in memory and schedules a 500ms debounced transaction commit
+        const payload = JSON.stringify({
+          text: e.target.value,
+          ts: Date.now()
+        });
+        storage.queueLine(notePath, payload);
+
+        // 2. Poll the VFS status to check when the debounce timer flushes and commits
+        startCommitCheck();
+      });
+    }
+
+    function startCommitCheck() {
+      if (checkTimer) clearInterval(checkTimer);
+
+      checkTimer = setInterval(() => {
+        // Query the kernel VFS: does the file still have pending (dirty) lines?
+        const isDirty = storage.isDirty(notePath);
+
+        if (!isDirty) {
+          // Debounce flush completed successfully and committed to IndexedDB!
+          clearInterval(checkTimer);
+          checkTimer = null;
+          status.className = 'save-status saved';
+          statusText.textContent = 'Changes Saved to VFS';
+        }
+      }, 100); // Check every 100ms
+    }
+
+    initConnection();
+  </script>
+</body>
+</html>

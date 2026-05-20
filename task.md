@@ -139,31 +139,77 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
 * **Summary**: Add User-Facing KB-MCP Configuration and Health Check
 * **Issue Type**: Story
 * **Priority**: High
-* **Status**: To Do
+* **Status**: Done
 * **Description**: KB-MCP runtime setup currently requires `window.vortexKernel.configureKb({ apiKey, kbId })` from the browser console. Add a Settings UI section for KB-MCP configuration so users can configure and verify the integration without console access.
 * **Acceptance Criteria**:
   - Settings can save KB ID and API key presence without rendering the raw saved key.
   - A health check reports configured, missing-key, missing-KB, and request-failed states clearly.
   - A sandboxed plugin can complete a `kb:read` request through the host proxy after configuration.
   - Unauthorized plugins continue to receive capability-denied errors.
+* **Verification**:
+  - Chrome DevTools MCP confirmed Settings saves KB ID and API key presence without re-rendering the raw saved key.
+  - Missing configuration and configured-with-hidden-key states are reported in the Settings panel.
+  - Live KB success still requires valid user-provided credentials.
 
 ### 🎫 Issue Key: VORTEX-111
 * **Summary**: Wire or Disable Placeholder Dock Apps
 * **Issue Type**: Task
 * **Priority**: Medium
-* **Status**: To Do
+* **Status**: Done
 * **Description**: Chrome DevTools review found the Dashboard and Files Dock icons render as first-class apps but have no click handlers.
 * **Acceptance Criteria**:
   - Dashboard and Files either open functional windows or render as visibly unavailable.
   - Clicking every enabled Dock icon produces an observable result.
   - The behavior is covered by a browser smoke check.
+* **Verification**:
+  - Chrome DevTools MCP confirmed repeated Dashboard Dock clicks keep one window, and Dock click restores a minimized system window.
 
 ### 🎫 Issue Key: VORTEX-112
 * **Summary**: Add Favicon Asset to Remove Browser 404 Noise
 * **Issue Type**: Task
 * **Priority**: Low
-* **Status**: To Do
+* **Status**: Done
 * **Description**: The main route currently triggers a non-blocking `/favicon.ico` 404 in Chrome DevTools.
 * **Acceptance Criteria**:
   - Loading `http://localhost:5173/` no longer produces a favicon 404.
   - Console and network reviews can distinguish real runtime issues from asset noise.
+
+### 🎫 Issue Key: VORTEX-113
+* **Summary**: Fix WebContainer npm Global Install Prefix
+* **Issue Type**: Bug
+* **Priority**: High
+* **Status**: Done
+* **Description**: Vortex OS Terminal ran `npm i -g @openai/codex` inside WebContainer and npm attempted to create package directories under `/usr/local/lib/node_modules`, causing an `EACCES` failure.
+* **Acceptance Criteria**:
+  - Global npm installs in Terminal use a writable WebContainer prefix.
+  - `npm config get prefix` reports `/home/.npm-global`.
+  - User-provided `--prefix` arguments are respected.
+* **Verification**:
+  - Chrome DevTools MCP confirmed `npm config get prefix` returns `/home/.npm-global`.
+  - Chrome DevTools MCP confirmed `npm i -g @openai/codex` normalizes to include `--prefix /home/.npm-global`.
+
+### 🎫 Issue Key: VORTEX-114
+* **Summary**: Remove Pyodide Vite Build Warnings
+* **Issue Type**: Task
+* **Priority**: Medium
+* **Status**: Done
+* **Description**: Static Pyodide imports caused Vite production builds to warn about Node compatibility modules externalized for browser use.
+* **Acceptance Criteria**:
+  - Terminal still boots Pyodide on demand.
+  - Production build completes without Pyodide externalization warnings.
+* **Verification**:
+  - `npm run build` completed successfully with no Pyodide externalization warnings.
+
+### 🎫 Issue Key: VORTEX-115
+* **Summary**: Execute npm Global Binaries from Terminal Shell
+* **Issue Type**: Bug
+* **Priority**: High
+* **Status**: Done
+* **Description**: After `npm i -g @openai/codex` succeeded in WebContainer, typing `codex` still returned `codex: command not found` because Vortex shell only dispatched built-in commands and did not route installed global npm binaries.
+* **Acceptance Criteria**:
+  - Unknown safe command names are checked against WebContainer global npm binary paths after WebContainer has booted.
+  - Installed npm global binaries can be executed directly from Vortex shell.
+  - Non-installed commands still return a shell-level `command not found`.
+* **Verification**:
+  - Chrome DevTools MCP confirmed `npm i -g cowsay` followed by `cowsay hello` renders cowsay output and does not print `command not found`.
+  - Chrome DevTools MCP confirmed `npm i -g @openai/codex` followed by `codex --version` executes the installed binary and does not print `codex: command not found`.

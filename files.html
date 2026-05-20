@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <title>Files</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: #171717; color: #f5f5f5; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+      padding: 16px;
+    }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    h1 { margin: 0; font-size: 18px; }
+    button {
+      border: 0;
+      border-radius: 7px;
+      background: #0a84ff;
+      color: #fff;
+      padding: 7px 11px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    .summary { color: #a3a3a3; font-size: 12px; margin-bottom: 10px; }
+    .list {
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 8px;
+      overflow: hidden;
+      background: rgba(255,255,255,.05);
+    }
+    .file-row {
+      display: grid;
+      grid-template-columns: minmax(160px, 1fr) 90px 120px;
+      gap: 10px;
+      padding: 10px 12px;
+      border-top: 1px solid rgba(255,255,255,.08);
+      font-size: 13px;
+      align-items: center;
+    }
+    .file-row:first-child { border-top: 0; }
+    .file-row.header {
+      color: #a3a3a3;
+      background: rgba(0,0,0,.22);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .path {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+    .muted { color: #a3a3a3; }
+    .empty {
+      padding: 22px 12px;
+      color: #a3a3a3;
+      text-align: center;
+      font-size: 13px;
+    }
+    @media (max-width: 520px) {
+      .file-row { grid-template-columns: 1fr; }
+      .file-row.header { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <h1>Files</h1>
+    <button type="button" id="refresh-btn">Refresh</button>
+  </div>
+  <div class="summary" id="summary">Reading IndexedDB VFS...</div>
+  <div class="list" id="file-list" aria-live="polite"></div>
+
+  <script type="module">
+    const DB_NAME = 'WebOSFileSystem';
+    const STORE_NAME = 'files';
+    const list = document.getElementById('file-list');
+    const summary = document.getElementById('summary');
+
+    function openDb() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME, { keyPath: 'filePath' });
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    function readAll(db) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction([STORE_NAME], 'readonly');
+        const req = tx.objectStore(STORE_NAME).getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes) return '0 B';
+      if (bytes < 1024) return `${bytes} B`;
+      return `${Math.round(bytes / 1024)} KB`;
+    }
+
+    function chunkBytes(chunks) {
+      return (chunks || []).reduce((total, chunk) => total + (chunk.byteLength || 0), 0);
+    }
+
+    function renderRows(rows) {
+      list.textContent = '';
+      if (!rows.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'No VFS files have been written yet.';
+        list.appendChild(empty);
+        return;
+      }
+
+      const header = document.createElement('div');
+      header.className = 'file-row header';
+      header.innerHTML = '<div>Path</div><div>Chunks</div><div>Compressed size</div>';
+      list.appendChild(header);
+
+      rows.forEach((row) => {
+        const item = document.createElement('div');
+        item.className = 'file-row';
+
+        const path = document.createElement('div');
+        path.className = 'path';
+        path.title = row.filePath;
+        path.textContent = row.filePath;
+
+        const chunks = document.createElement('div');
+        chunks.className = 'muted';
+        chunks.textContent = String(Array.isArray(row.chunks) ? row.chunks.length : 0);
+
+        const size = document.createElement('div');
+        size.className = 'muted';
+        size.textContent = formatBytes(chunkBytes(row.chunks));
+
+        item.append(path, chunks, size);
+        list.appendChild(item);
+      });
+    }
+
+    async function refresh() {
+      try {
+        const db = await openDb();
+        const rows = await readAll(db);
+        rows.sort((a, b) => String(a.filePath).localeCompare(String(b.filePath)));
+        renderRows(rows);
+        summary.textContent = `${rows.length} file${rows.length === 1 ? '' : 's'} in ${DB_NAME}`;
+        db.close();
+      } catch (err) {
+        list.textContent = '';
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = `Unable to read VFS: ${err.message}`;
+        list.appendChild(empty);
+        summary.textContent = 'VFS unavailable';
+      }
+    }
+
+    document.getElementById('refresh-btn').addEventListener('click', refresh);
+    refresh();
+  </script>
+</body>
+</html>

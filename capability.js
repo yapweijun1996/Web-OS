@@ -24,7 +24,10 @@ function parseToken(token) {
 
 // True if `resourcePath` sits within `scope`: '/reports' covers '/reports' and
 // any '/reports/...' descendant, but not the sibling '/reports-secret'.
+// Path traversal via '..' segments is rejected outright — the VFS has no
+// directory tree to navigate and '..' in a key is always an attack attempt.
 function scopeCovers(scope, resourcePath) {
+  if (resourcePath.includes('..')) return false;
   if (resourcePath === scope) return true;
   const prefix = scope.endsWith('/') ? scope : scope + '/';
   return resourcePath.startsWith(prefix);

@@ -20,9 +20,15 @@ Vortex OS is an ultra-lightweight, high-performance web desktop environment buil
 │   └── workflows/
 │       └── deploy.yml          # Automated GitHub Pages CI/CD workflow
 ├── docs/
+│   ├── alpine-cold-start.md    # Wasm Alpine Linux optimization guide
+│   ├── kb-mcp-integration.md   # KB-MCP memory integration guide
 │   ├── plugin-system.md        # Technical guide for building secure plugins
+│   ├── resource-monitor.md     # Resource monitor (process manager) design spec
 │   └── storage-engine.md       # High-performance IndexedDB + JSONL.gz manual
 ├── index.html                  # Main OS Desktop GUI and Window Manager
+├── calculator.html             # High-performance native-feel Calculator app
+├── notes.html                  # Debounced real-time auto-saving Notes app
+├── terminal.html               # Multi-terminal interactive rendering app
 ├── test.html                   # Browser-based automated test runner for VFS
 ├── host-core.js                # Secure plugin harness & capability tokens validator
 ├── plugin.js                   # Example sandboxed client-side plugin

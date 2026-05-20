@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Compressed Storage Engine - Automated Browser Tests</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <title>Vortex OS - Automated Browser Tests</title>
   <style>
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -44,11 +45,13 @@
 </head>
 <body>
 
-  <h1>Compressed Storage Engine (IndexedDB + JSONL.gz) Test Runner</h1>
+  <h1>Vortex OS Automated Browser Test Runner</h1>
   <div id="results">Running tests...</div>
 
   <script type="module">
     import { CompressedStorageEngine } from './jsonl-storage-engine.js';
+    import { CapabilitySet } from './capability.js';
+    import { sanitizeManifest } from './plugin-installer.js';
 
     async function runTests() {
       const resultsDiv = document.getElementById('results');
@@ -192,6 +195,102 @@
               }
             }
             return `100% of ${COUNT} lines recovered intact from a fresh engine instance.`;
+          }
+        },
+        {
+          name: "Test 7: Capability — scoped FS token enforces its path scope (Bug B)",
+          fn: async () => {
+            const fs = new CapabilitySet(['fs:write:/reports']);
+            const checks = [
+              ['descendant path is in scope', fs.authorizes('fs:write:/reports', 'fs:write', '/reports/a.jsonl'), true],
+              ['the scope dir itself is in scope', fs.authorizes('fs:write:/reports', 'fs:write', '/reports'), true],
+              ['unrelated path is denied', fs.authorizes('fs:write:/reports', 'fs:write', '/etc/passwd'), false],
+              ['sibling sharing a prefix is denied', fs.authorizes('fs:write:/reports', 'fs:write', '/reports-secret/x'), false],
+              ['wrong verb is denied', fs.authorizes('fs:write:/reports', 'fs:read', '/reports/a'), false],
+              ['ungranted token is denied', fs.authorizes('fs:write:/other', 'fs:write', '/other/x'), false]
+            ];
+            for (const [label, got, want] of checks) {
+              if (got !== want) throw new Error(`${label}: got ${got}, expected ${want}`);
+            }
+            return `All ${checks.length} path-scope authorization checks passed.`;
+          }
+        },
+        {
+          name: "Test 8: Capability — a token only authorizes its own action (Bug A)",
+          fn: async () => {
+            const caps = new CapabilitySet(['system:notify', 'fs:write:/reports']);
+            const checks = [
+              ['system:notify authorizes a notify', caps.authorizes('system:notify', 'system:notify'), true],
+              ['a notify token cannot authorize fs:write', caps.authorizes('system:notify', 'fs:write', '/reports/x'), false],
+              ['a flat token rejects a scoped call', caps.authorizes('system:notify', 'system:notify', '/x'), false]
+            ];
+            for (const [label, got, want] of checks) {
+              if (got !== want) throw new Error(`${label}: got ${got}, expected ${want}`);
+            }
+            return `All ${checks.length} action-token binding checks passed.`;
+          }
+        },
+        {
+          name: "Test 9: Capability — flat KB token matches by exact verb",
+          fn: async () => {
+            const kb = new CapabilitySet(['kb-mcp:read']);
+            const checks = [
+              ['kb-mcp:read authorizes a read', kb.authorizes('kb-mcp:read', 'kb-mcp:read'), true],
+              ['a read token cannot authorize a write', kb.authorizes('kb-mcp:read', 'kb-mcp:write'), false]
+            ];
+            for (const [label, got, want] of checks) {
+              if (got !== want) throw new Error(`${label}: got ${got}, expected ${want}`);
+            }
+            return `All ${checks.length} flat-token verb-match checks passed.`;
+          }
+        },
+        {
+          name: "Test 10: Manifest — KB-MCP permission tokens sanitize safely",
+          fn: async () => {
+            const manifest = sanitizeManifest({
+              id: 'com.vortex.agent.analyzer',
+              name: 'AI Data Analyzer',
+              version: '1.0.0',
+              entrypoint: 'plugin.js',
+              permissions: ['kb-mcp:read', 'kb-mcp:write', 'fs:write:/reports']
+            }, location.origin + '/manifest.json');
+
+            const expected = ['kb-mcp:read', 'kb-mcp:write', 'fs:write:/reports'];
+            for (const token of expected) {
+              if (!manifest.permissions.includes(token)) {
+                throw new Error(`Expected sanitized manifest to retain ${token}`);
+              }
+            }
+
+            try {
+              sanitizeManifest({
+                id: 'com.vortex.bad',
+                name: 'Bad',
+                entrypoint: 'plugin.js',
+                permissions: ['kb mcp:read']
+              }, location.origin + '/manifest.json');
+            } catch {
+              return 'Accepted kb-mcp tokens and rejected malformed permission strings.';
+            }
+            throw new Error('Malformed permission token was not rejected.');
+          }
+        },
+        {
+          name: "Test 11: VFS — list files by prefix for terminal shell",
+          fn: async (engine) => {
+            const path = '/test_logs/list_files.jsonl.gz';
+            await new Promise((res, rej) => {
+              const req = engine.db.transaction(['files'], 'readwrite').objectStore('files').delete(path);
+              req.onsuccess = res;
+              req.onerror = rej;
+            });
+
+            await engine.appendToGzFile(path, JSON.stringify({ event: 'listed' }));
+            const files = await engine.listFiles('/test_logs');
+            if (!files.includes(path)) {
+              throw new Error(`Expected ${path} in listFiles('/test_logs'), got ${JSON.stringify(files)}`);
+            }
+            return `listFiles('/test_logs') returned ${files.length} matching file(s).`;
           }
         }
       ];
