@@ -15,11 +15,22 @@ const TRUSTED_MANIFEST_HOSTS = [
 ];
 
 // CORS bypass endpoint. When a manifest host omits CORS headers the direct
-// fetch fails. Set this to a self-hosted Cloudflare Worker / proxy URL to
-// enable the fallback. Disabled by default: corsproxy.io (a public third-party
-// service) is not trusted because it can intercept and substitute manifest
-// content before sanitization runs.
-const CORS_PROXY = null; // Set to 'https://your-proxy.example.com/?url=' to enable.
+// fetch fails. The proxy URL is read at call time from localStorage so it can
+// be set via the Settings panel without redeploying (VORTEX-108). Disabled by
+// default.
+// SECURITY: a proxy can intercept and substitute manifest content, so only
+// point this at a self-hosted proxy you trust. sanitizeManifest still runs on
+// every proxied response regardless of where it came from.
+const LS_CORS_PROXY = 'vortex_cors_proxy_url';
+
+function getCorsProxy() {
+  try {
+    const value = localStorage.getItem(LS_CORS_PROXY);
+    return value && value.trim() ? value.trim() : null;
+  } catch {
+    return null;
+  }
+}
 
 const ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{1,127}$/;
 const VERSION_PATTERN = /^[0-9]+(\.[0-9]+){0,3}([-+][a-zA-Z0-9.]+)?$/;
@@ -41,23 +52,25 @@ function isOriginAllowed(rawUrl) {
   return TRUSTED_MANIFEST_HOSTS.includes(u.hostname);
 }
 
-// Fetches the raw manifest text. If the direct fetch fails AND a CORS_PROXY
-// is configured, retries through it. With no proxy configured, a CORS failure
-// surfaces a descriptive error rather than silently forwarding to a third party.
+// Fetches the raw manifest text. If the direct fetch fails AND a CORS proxy
+// is configured (via Settings), retries through it. With no proxy configured,
+// a CORS failure surfaces a descriptive error rather than silently forwarding
+// to a third party.
 async function fetchManifestText(url) {
   try {
     const res = await fetch(url);
     if (res.ok) return await res.text();
     throw new Error(`Manifest fetch failed (HTTP ${res.status}).`);
   } catch (directErr) {
-    if (!CORS_PROXY) {
+    const proxy = getCorsProxy();
+    if (!proxy) {
       throw new Error(
         `Cannot fetch manifest: ${directErr.message}. ` +
-        'If the server lacks CORS headers, configure a self-hosted proxy in plugin-installer.js.'
+        'If the server lacks CORS headers, set a CORS proxy URL in Settings.'
       );
     }
-    // Proxy fallback — only reached when CORS_PROXY is explicitly configured.
-    const proxied = await fetch(CORS_PROXY + encodeURIComponent(url));
+    // Proxy fallback — only reached when a proxy URL is explicitly configured.
+    const proxied = await fetch(proxy + encodeURIComponent(url));
     if (!proxied.ok) {
       throw new Error(`Manifest fetch failed via configured proxy (HTTP ${proxied.status}).`);
     }
@@ -138,7 +151,10 @@ function sanitizeManifest(raw, manifestUrl) {
     allowSameOrigin: false
   };
 
-  return { id, name, version, entrypoint, permissions, sandbox };
+  // Store the fully-resolved absolute URL so launchPlugin never needs to
+  // re-resolve a relative path against a manifestUrl, closing the supply-chain
+  // attack where a CDN package update silently changes the entrypoint.
+  return { id, name, version, entrypoint: resolvedEntrypoint.href, permissions, sandbox };
 }
 
 // Public entry point: validate origin -> fetch (direct or proxied) -> parse ->

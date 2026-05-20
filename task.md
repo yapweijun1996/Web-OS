@@ -112,7 +112,7 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
 * **Summary**: Implement CORS Proxy Bypass for Third-Party Manifest Fetching
 * **Issue Type**: Task
 * **Priority**: Medium
-* **Status**: To Do
+* **Status**: Done
 * **Description**: Introduce a configurable CORS bypass proxy helper in `index.html` to allow downloading plugin manifests from remote non-CORS enabled servers.
 * **Acceptance Criteria**:
   - Dynamic App installation successfully fetches manifests from third-party domains (e.g. raw.githubusercontent.com) without triggering CORS block.

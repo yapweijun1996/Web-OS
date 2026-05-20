@@ -317,8 +317,9 @@
       background: #1e1e1e;
     }
 
-    /* Add App Modal */
-    #add-app-modal {
+    /* Modals */
+    #add-app-modal,
+    #settings-modal {
       display: none;
       position: absolute;
       top: 50%;
@@ -335,10 +336,11 @@
       z-index: 10000;
     }
 
-    #add-app-modal h3 { margin: 0 0 6px; font-size: 16px; color: var(--text); }
-    #add-app-modal p { font-size: 12px; color: var(--text-dim); margin: 0 0 14px; }
+    #add-app-modal h3, #settings-modal h3 { margin: 0 0 6px; font-size: 16px; color: var(--text); }
+    #add-app-modal p, #settings-modal p { font-size: 12px; color: var(--text-dim); margin: 0 0 14px; }
 
-    #manifest-url-input {
+    #manifest-url-input,
+    #cors-proxy-input {
       width: 100%;
       padding: 8px 10px;
       background: rgba(0, 0, 0, 0.35);
@@ -349,10 +351,22 @@
       margin-bottom: 18px;
     }
 
-    #manifest-url-input:focus {
+    #manifest-url-input:focus,
+    #cors-proxy-input:focus {
       outline: none;
       border-color: var(--accent);
       box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3);
+    }
+
+    .settings-warning {
+      font-size: 11px;
+      color: #f9c74f;
+      background: rgba(249, 199, 79, 0.1);
+      border: 1px solid rgba(249, 199, 79, 0.25);
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin: -8px 0 16px;
+      line-height: 1.5;
     }
 
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
@@ -367,6 +381,17 @@
 
     .btn-secondary { background: rgba(255, 255, 255, 0.14); color: var(--text); }
     .btn-primary { background: var(--accent); color: #fff; font-weight: 600; }
+
+    .vx-toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: #3a3a3c; color: #f2f2f7;
+      padding: 12px 18px; border-radius: 10px;
+      font: 13px/1.4 -apple-system, sans-serif;
+      box-shadow: 0 4px 20px rgba(0,0,0,.6);
+      z-index: 99999; max-width: 320px;
+      animation: vx-in .18s ease;
+    }
+    @keyframes vx-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
   </style>
 </head>
 <body>
@@ -415,6 +440,20 @@
     </div>
   </div>
 
+  <!-- Settings Modal Dialog (VORTEX-108) -->
+  <div id="settings-modal">
+    <h3>Settings</h3>
+    <p>CORS proxy URL — used to fetch plugin manifests from hosts that do not send CORS headers. Leave blank to disable.</p>
+    <input type="text" id="cors-proxy-input" placeholder="https://your-proxy.example.com/?url=">
+    <div class="settings-warning">
+      Only point this at a proxy you host and trust. A proxy can substitute manifest content; manifests are still sanitized after fetching, but a hostile proxy widens the attack surface.
+    </div>
+    <div class="modal-actions">
+      <button id="cancel-settings-btn" class="btn btn-secondary">Cancel</button>
+      <button id="save-settings-btn" class="btn btn-primary">Save</button>
+    </div>
+  </div>
+
   <!-- Dock -->
   <div id="dock-container">
     <div id="dock">
@@ -428,7 +467,7 @@
 
   <script type="module">
     import { PluginHarness } from './host-core.js';
-    import { installManifest } from './plugin-installer.js';
+    import { installManifest, sanitizeManifest, isOriginAllowed } from './plugin-installer.js';
     import { CompressedStorageEngine } from './jsonl-storage-engine.js';
     import { SystemEventBus, OrchestratorAgent } from './agent-core.js';
     import { SystemEvents } from './contracts.js';
@@ -437,22 +476,24 @@
     let zIndexCounter = 10;
     let installedApps = loadInstalledApps();
 
-    // Validate localStorage entries before use — guards against corrupt or
-    // manually tampered data causing crashes at render time.
+    // Re-run the full sanitizeManifest pipeline on every stored entry so a
+    // tampered permissions array or entrypoint cannot bypass the capability
+    // model just by surviving in localStorage across a reload.
     function loadInstalledApps() {
       try {
         const raw = localStorage.getItem('vortex_installed_apps');
         if (!raw) return [];
         const apps = JSON.parse(raw);
         if (!Array.isArray(apps)) return [];
-        return apps.filter(app =>
-          app &&
-          typeof app.manifest === 'object' && app.manifest !== null &&
-          typeof app.manifest.id === 'string' && app.manifest.id &&
-          typeof app.manifest.name === 'string' && app.manifest.name &&
-          typeof app.manifest.entrypoint === 'string' && app.manifest.entrypoint &&
-          typeof app.manifestUrl === 'string' && app.manifestUrl
-        );
+        return apps.filter(app => {
+          try {
+            if (!app || typeof app.manifestUrl !== 'string' || !app.manifestUrl) return false;
+            sanitizeManifest(app.manifest, app.manifestUrl);
+            return true;
+          } catch {
+            return false;
+          }
+        });
       } catch {
         return [];
       }
@@ -560,6 +601,16 @@
       };
     }
 
+    // Non-blocking status feedback — replaces alert() so the install dialog
+    // cannot freeze the event loop or be spammed into a tab lock.
+    function showToast(message) {
+      const el = document.createElement('div');
+      el.className = 'vx-toast';
+      el.textContent = message;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 4000);
+    }
+
     // VORTEX-104: kernel event bus + background multi-agent orchestrator.
     // VORTEX-102: the storage engine doubles as the VFS the orchestrator
     // auto-saves activity reports into.
@@ -577,6 +628,9 @@
         guard: orchestratorGuard
       });
       orchestrator.start();
+      // Defer rendering plugin icons until the storage engine is ready so
+      // launchPlugin cannot be called with an uninitialized IndexedDB handle.
+      renderInstalledApps();
     })();
 
     // Durability barrier (VORTEX-102): flush pending auto-save buffers when the
@@ -691,9 +745,18 @@
       desktop.appendChild(win);
       focusWindow(win);
 
-      // Resolve absolute entrypoint relative to manifest URL and re-validate
-      // the protocol — guards against a tampered localStorage entry that
-      // somehow bypassed the initial installManifest() protocol check.
+      // Re-validate the manifest origin at launch time so a manipulated
+      // localStorage entry with a swapped manifestUrl cannot slip through.
+      if (!isOriginAllowed(manifestUrl)) {
+        console.error('[Vortex] Rejected plugin with untrusted manifestUrl at launch:', manifestUrl);
+        win.remove();
+        return;
+      }
+
+      // Resolve absolute entrypoint and re-validate the protocol.
+      // sanitizeManifest already stored a resolved absolute href, so the URL()
+      // call here is a pure no-op for valid installs and a safety net for any
+      // tampered entry that slipped past loadInstalledApps re-validation.
       const resolvedEntrypoint = new URL(manifest.entrypoint, manifestUrl).href;
       if (!resolvedEntrypoint.startsWith('https://') && !resolvedEntrypoint.startsWith('http://')) {
         console.error('[Vortex] Rejected unsafe entrypoint protocol:', resolvedEntrypoint);
@@ -773,10 +836,36 @@
 
         renderInstalledApps();
         modal.style.display = 'none';
-        alert(`Successfully installed sandboxed application: ${manifest.name}!`);
+        showToast(`Installed: ${manifest.name}`);
       } catch (err) {
-        alert(`Installation failed: ${err.message}`);
+        showToast(`Install failed: ${err.message}`);
       }
+    });
+
+    // VORTEX-108: Settings panel — configure the CORS proxy URL that
+    // plugin-installer.js falls back to when a manifest host lacks CORS headers.
+    const settingsModal = document.getElementById('settings-modal');
+    const corsProxyInput = document.getElementById('cors-proxy-input');
+    const cancelSettingsBtn = document.getElementById('cancel-settings-btn');
+    const saveSettingsBtn = document.getElementById('save-settings-btn');
+
+    function openSettings() {
+      corsProxyInput.value = localStorage.getItem('vortex_cors_proxy_url') || '';
+      settingsModal.style.display = 'block';
+    }
+
+    cancelSettingsBtn.addEventListener('click', () => {
+      settingsModal.style.display = 'none';
+    });
+
+    saveSettingsBtn.addEventListener('click', () => {
+      const value = corsProxyInput.value.trim();
+      if (value) {
+        localStorage.setItem('vortex_cors_proxy_url', value);
+      } else {
+        localStorage.removeItem('vortex_cors_proxy_url');
+      }
+      settingsModal.style.display = 'none';
     });
 
     // Live menu bar clock
@@ -824,7 +913,9 @@
 
     const MENUS = {
       apple: [
-        { label: 'About Vortex OS', action: () => alert('Vortex OS\nA vanilla web operating system.\nVersion 1.0.0') }
+        { label: 'About Vortex OS', action: () => alert('Vortex OS\nA vanilla web operating system.\nVersion 1.0.0') },
+        { separator: true },
+        { label: 'System Settings…', action: openSettings }
       ],
       File: [
         { label: 'New Plugin App…', action: () => { modal.style.display = 'block'; manifestInput.value = window.location.origin + '/manifest.json'; } },
@@ -922,8 +1013,6 @@
     document.addEventListener('click', closeMenu);
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
 
-    // Initial render call on startup
-    renderInstalledApps();
   </script>
 </body>
 </html>
