@@ -189,6 +189,11 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
       cursor: pointer;
       border-radius: 8px;
       transition: background 0.15s, transform 0.1s;
@@ -197,6 +202,11 @@
     }
 
     .desktop-icon:hover { background: rgba(255, 255, 255, 0.14); }
+    .desktop-icon:focus-visible {
+      outline: 2px solid rgba(255, 255, 255, 0.9);
+      outline-offset: 2px;
+      background: rgba(255, 255, 255, 0.14);
+    }
     .desktop-icon:active { transform: scale(0.95); }
 
     .icon-img {
@@ -549,10 +559,10 @@
 
   <!-- Desktop Icons -->
   <div id="desktop">
-    <div class="desktop-icon" data-open-src="test.html">
+    <button type="button" class="desktop-icon" data-open-src="test.html" aria-label="Open Storage Tests">
       <span class="icon-img">🧪</span>
       <span class="icon-label">Storage Tests</span>
-    </div>
+    </button>
     <div class="desktop-icon" data-open-src="notes.html">
       <span class="icon-img">✍️</span>
       <span class="icon-label">Vortex Notes</span>
