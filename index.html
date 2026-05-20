@@ -1227,6 +1227,22 @@
       if (e.key === 'Escape') {
         closeMenu();
         closeDesktopContextPanel();
+        return;
+      }
+      // Window shortcuts use Ctrl+Alt: the macOS Cmd equivalents (Cmd+W/M/R)
+      // are reserved by the browser/OS and cannot be intercepted by a page.
+      // e.code is layout-independent, so Option's character remapping on
+      // macOS does not matter here.
+      if (e.ctrlKey && e.altKey && !e.metaKey) {
+        const w = focusedWindow();
+        if (!w) return;
+        if (e.code === 'KeyW') { e.preventDefault(); clickWindowControl('.win-close'); }
+        else if (e.code === 'KeyM') { e.preventDefault(); wm.minimize(w); }
+        else if (e.code === 'KeyR') {
+          e.preventDefault();
+          const f = w.querySelector('iframe');
+          if (f) f.src = f.src;
+        }
       }
     });
 
