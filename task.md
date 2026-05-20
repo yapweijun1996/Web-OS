@@ -256,8 +256,9 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
   - Added `scripts/build-alpine-initramfs.sh` to build `public/v86/alpine-initramfs.cpio.gz` from the official Alpine x86 minirootfs.
   - Added `linux alpine`, `linux buildroot`, and `linux help` Terminal command handling.
   - Documented the Alpine source URL, build command, artifact size, and generated SHA-256.
+  - Chrome DevTools MCP verified `linux alpine` boots Alpine `3.23.0` and exposes `/sbin/apk`.
 * **Remaining**:
-  - Verify v86 guest networking is sufficient for `apk update` and `apk add bash curl ca-certificates`, or replace the initramfs profile with a fuller writable Alpine/Debian disk image if networking/persistence blocks package installs.
+  - Provide a v86 DHCP/relay path or replace the initramfs profile with a fuller Alpine/Debian disk image with preinstalled `bash`, `curl`, and CA certificates; current local DHCP broadcasts do not receive a lease.
 
 ---
 
