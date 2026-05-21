@@ -41,3 +41,4 @@ For the high-level architecture overview, start with [`../DESIGN.md`](../DESIGN.
 ## Reviews
 
 - [Chrome DevTools Review — 2026-05-20](chrome-devtools-review-2026-05-20.md) — live dev-server audit via the Chrome DevTools MCP server.
+- [Browser Chrome UI/UX Review — 2026-05-21](browser-chrome-ui-review.md) — Browser app audit against Chrome-like toolbar, tab, omnibox, and responsive layout expectations.

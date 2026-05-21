@@ -318,11 +318,11 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
 * **Issue Type**: Story
 * **Priority**: Medium
 * **Status**: Done
-* **Description**: Add a first-party Browser app to Vortex OS with an address/search bar, navigation controls, and default suggested websites including `https://yapweijun1996.com/` and `https://github.com/yapweijun1996`.
+* **Description**: Add a first-party Browser app to Vortex OS with an address/search bar, navigation controls, and default suggested websites including `https://yapweijun1996.com/`, `https://yapweijun1996.github.io/Web-OS/`, and `https://github.com/yapweijun1996`.
 * **Acceptance Criteria**:
   - `browser.html` is emitted by the Vite multi-page build.
   - The Browser app is available from the Dock and desktop context menu.
-  - Default suggestions include Yap Wei Jun, GitHub profile, GitHub, OpenAI, ChatGPT, MDN, npm, and Vercel.
+  - Default suggestions include Yap Wei Jun, GitHub Pages, GitHub profile, GitHub, OpenAI, ChatGPT, MDN, npm, and Vercel.
   - Address input accepts full URLs, bare domains, and search terms.
   - Each bookmark can choose Embed or Tab mode, with custom bookmark add/delete support.
   - Sites that block iframe embedding show a clear external-tab panel instead of a blank frame.
@@ -334,7 +334,29 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
   - Chrome DevTools MCP verified the address bar normalizes `github.com/yapweijun1996` to `https://github.com/yapweijun1996` and search terms to a Google search URL.
   - Chrome DevTools MCP verified the Dock Browser button opens a focused Browser window with `browser.html` and active Dock state.
   - Chrome DevTools MCP verified per-bookmark Embed/Tab mode defaults, persisted mode changes, GitHub iframe-blocked messaging, custom bookmark creation, and custom bookmark deletion.
-  - Chrome DevTools MCP verified Yap Wei Jun defaults to Tab mode to avoid iframe sandbox CORS/service-worker failures.
+  - Chrome DevTools MCP verified Yap Wei Jun and GitHub Pages load in iframe Embed mode while GitHub profile remains external-only because GitHub blocks iframe embedding.
+
+---
+
+### 🎫 Issue Key: VORTEX-131
+* **Summary**: Redesign Browser App To Follow Chrome-Like UI
+* **Issue Type**: Story
+* **Priority**: High
+* **Status**: To Do
+* **Epic**: System Apps
+* **Description**: The Browser app is functional, but the current layout behaves more like a website launcher than a Chrome-like browser. The persistent suggestions grid and bookmark editor consume too much viewport, the app has no tab strip or tab model, and mobile browsing is nearly blocked by layout height. See `docs/browser-chrome-ui-review.md`.
+* **Acceptance Criteria**:
+  - Add a Chrome-like tab strip above the toolbar with active tab, close tab, and new tab controls.
+  - Keep the toolbar compact with Back, Forward, Reload-or-Stop, Home, omnibox, bookmark/star, external-open, and overflow menu controls.
+  - Move suggestions and bookmark shortcuts into a New Tab state; after navigation, the content viewport fills at least 70% of desktop height and 65% of mobile height.
+  - Move custom bookmark add/edit and Embed/Tab mode controls into a menu, dialog, or side panel instead of repeating them on every card.
+  - External-only pages show `Open in Tab`, `Copy URL`, and `Back to New Tab` actions with a concise explanation.
+  - Accessibility labels are unique for bookmark mode controls and primary action buttons; keyboard tab order is verified.
+* **Verification**:
+  - Chrome DevTools MCP audit captured desktop and mobile evidence in `docs/browser-chrome-ui-review.md`.
+  - Desktop baseline measured suggestions at about `290px` and content at about `395px` in a `733px` viewport.
+  - Mobile baseline measured suggestions at about `658.5px` and content at about `26.5px` in a `733px` viewport.
+  - Console review found no app-blocking exception during the Browser app audit; remaining issues are documented as accessibility and sandbox warnings.
 
 ---
 

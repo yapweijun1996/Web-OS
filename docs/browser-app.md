@@ -83,3 +83,7 @@ Then verify in Chrome DevTools MCP:
 - a custom bookmark can be added, switched to Tab mode, persisted, and deleted.
 - GitHub Profile in Embed mode shows the blocked-embedding panel.
 - the console has no app-blocking uncaught exceptions.
+
+## Chrome UI Review
+
+The current Browser app is functional but is not yet Chrome-like in layout. See [`browser-chrome-ui-review.md`](browser-chrome-ui-review.md) for the live Chrome DevTools MCP audit and redesign backlog.
