@@ -263,18 +263,22 @@
   <script type="module">
     const MODE_STORAGE_KEY = 'vortex_browser_site_modes';
     const MODE_SCHEMA_KEY = 'vortex_browser_site_modes_schema';
-    const MODE_SCHEMA_VERSION = '2';
+    const MODE_SCHEMA_VERSION = '3';
     const CUSTOM_STORAGE_KEY = 'vortex_browser_custom_sites';
+    const BASE_FRAME_SANDBOX = 'allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts';
+    const SAME_ORIGIN_FRAME_SANDBOX = `${BASE_FRAME_SANDBOX} allow-same-origin`;
+    const EMBED_SAME_ORIGIN_HOSTS = new Set([
+      'yapweijun1996.com'
+    ]);
     const EXTERNAL_ONLY_HOSTS = new Set([
       'chatgpt.com',
       'github.com',
       'google.com',
       'openai.com',
-      'vercel.com',
-      'yapweijun1996.com'
+      'vercel.com'
     ]);
     const DEFAULT_SITES = [
-      { id: 'yapweijun', title: 'Yap Wei Jun', url: 'https://yapweijun1996.com/', icon: 'YW', defaultMode: 'tab', externalOnly: true },
+      { id: 'yapweijun', title: 'Yap Wei Jun', url: 'https://yapweijun1996.com/', icon: 'YW', defaultMode: 'embed' },
       { id: 'github-profile', title: 'GitHub Profile', url: 'https://github.com/yapweijun1996', icon: 'GH', defaultMode: 'tab', externalOnly: true },
       { id: 'github', title: 'GitHub', url: 'https://github.com/', icon: 'GH', defaultMode: 'tab', externalOnly: true },
       { id: 'openai', title: 'OpenAI', url: 'https://openai.com/', icon: 'AI', defaultMode: 'tab', externalOnly: true },
@@ -324,6 +328,9 @@
       if (localStorage.getItem(MODE_SCHEMA_KEY) === MODE_SCHEMA_VERSION) return;
       DEFAULT_SITES.forEach((site) => {
         if (site.externalOnly && site.defaultMode === 'tab' && siteModes[site.id] === 'embed') {
+          delete siteModes[site.id];
+        }
+        if (embedKeepsOrigin(site.url) && site.defaultMode === 'embed' && siteModes[site.id] === 'tab') {
           delete siteModes[site.id];
         }
       });
@@ -409,6 +416,19 @@
       }
     }
 
+    function embedKeepsOrigin(url) {
+      try {
+        const host = new URL(url).hostname.replace(/^www\./, '');
+        return EMBED_SAME_ORIGIN_HOSTS.has(host);
+      } catch {
+        return false;
+      }
+    }
+
+    function setFrameSandbox(url) {
+      frame.setAttribute('sandbox', embedKeepsOrigin(url) ? SAME_ORIGIN_FRAME_SANDBOX : BASE_FRAME_SANDBOX);
+    }
+
     function setStatus(message) {
       status.textContent = message;
       status.classList.add('visible');
@@ -458,6 +478,7 @@
         return;
       }
       externalPanel.hidden = true;
+      setFrameSandbox(target);
       frame.src = target;
       setStatus(`Loading ${new URL(target).hostname}`);
     }

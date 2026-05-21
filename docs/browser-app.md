@@ -32,7 +32,9 @@ Browser suggestions can open in two modes:
 - **Embed** loads the target URL inside the app iframe.
 - **Tab** opens the target in a normal browser tab and shows an external-tab panel in Vortex OS.
 
-External-only defaults, including Yap Wei Jun, GitHub, OpenAI, ChatGPT, Google, and Vercel, start in Tab mode to avoid blank frames and sandbox/CORS console noise.
+The Yap Wei Jun site is a controlled first-party embed target. It keeps its own iframe origin so its CSS, JavaScript modules, and service-worker checks can run normally inside WebOS.
+
+External-only defaults, including GitHub, OpenAI, ChatGPT, Google, and Vercel, start in Tab mode to avoid blank frames and sandbox/CORS console noise.
 
 Modes are persisted in:
 
@@ -59,7 +61,6 @@ Known external-only hosts include:
 - `chatgpt.com`
 - `google.com`
 - `vercel.com`
-- `yapweijun1996.com`
 
 For example, `https://github.com/yapweijun1996` cannot open inside the Web OS iframe because GitHub sends `X-Frame-Options: deny` and a Content Security Policy with `frame-ancestors 'none'`. Other modern sites may load as a sandboxed opaque origin and then fail their own CORS, module-script, or service-worker assumptions. Chrome enforces these limits before app JavaScript can render the page. This is expected browser security behavior.
 
