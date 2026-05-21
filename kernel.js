@@ -154,6 +154,79 @@ function openNotes() {
   window.openWindow('Vortex Notes', 'notes.html');
 }
 
+function openSearch() {
+  openOrFocusSystemWindow('Search', 'search.html');
+}
+
+// Web App Launcher: external PWAs that require full browser capabilities
+// (SharedArrayBuffer, service workers, etc.) cannot be safely embedded in
+// an iframe inside a cross-origin-isolated page. Show an App Launcher window
+// instead — the user clicks "Open App" to launch in a new tab at full fidelity.
+function openWebApp(title, url, iconGradient, emoji, description) {
+  // Sanitize: only allow https URLs from launchPlugin (already validated there)
+  if (!url.startsWith('https://') && !url.startsWith('http://')) return;
+
+  const existing = wm.windows.find(w => w.dataset.appSrc === url);
+  if (existing) { wm.restore(existing); updateDockIndicators(); return; }
+
+  const win = wm.open({
+    title,
+    fillBody(body) {
+      const s = body.style;
+      s.display = 'flex';
+      s.flexDirection = 'column';
+      s.alignItems = 'center';
+      s.justifyContent = 'center';
+      s.gap = '16px';
+      s.padding = '32px 24px';
+      s.background = '#1a1a1c';
+      s.fontFamily = "-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif";
+      s.color = '#f2f2f7';
+      s.textAlign = 'center';
+      s.webkitFontSmoothing = 'antialiased';
+
+      const tile = document.createElement('div');
+      tile.style.cssText = `width:72px;height:72px;border-radius:16px;background:${iconGradient};display:flex;align-items:center;justify-content:center;font-size:36px;box-shadow:0 4px 20px rgba(0,0,0,.55);flex-shrink:0;`;
+      tile.textContent = emoji;
+
+      const nameEl = document.createElement('div');
+      nameEl.style.cssText = 'font-size:17px;font-weight:600;';
+      nameEl.textContent = title;
+
+      const descEl = document.createElement('div');
+      descEl.style.cssText = 'font-size:12px;color:#98989f;max-width:260px;line-height:1.55;';
+      descEl.textContent = description || 'External web application';
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.style.cssText = 'margin-top:4px;padding:10px 26px;background:#0a84ff;color:#fff;border-radius:999px;text-decoration:none;font-size:13px;font-weight:600;';
+      link.textContent = 'Open App ↗';
+
+      const hint = document.createElement('div');
+      hint.style.cssText = 'font-size:11px;color:#636366;';
+      hint.textContent = 'Opens in a new browser tab';
+
+      body.append(tile, nameEl, descEl, link, hint);
+    }
+  });
+  win.dataset.appSrc = url;
+  updateDockIndicators();
+  systemBus.emit(SystemEvents.APP_LAUNCH, { title, src: url, kind: 'webapp' });
+  return win;
+}
+
+function openMarkdownEditor() {
+  openWebApp(
+    'Markdown Editor',
+    'https://yapweijun1996.github.io/Markdown-Editor/',
+    'linear-gradient(145deg, #32ade6, #0a74d8)',
+    '📝',
+    'Markdown to Word converter with live preview and Mermaid diagram support.'
+  );
+}
+
 // Advanced Window Opener for Sandboxed Plugins.
 window.launchPlugin = function(manifest, manifestUrl) {
   // Re-validate the manifest origin at launch time so a manipulated
@@ -170,6 +243,20 @@ window.launchPlugin = function(manifest, manifestUrl) {
   const resolvedEntrypoint = new URL(manifest.entrypoint, manifestUrl).href;
   if (!resolvedEntrypoint.startsWith('https://') && !resolvedEntrypoint.startsWith('http://')) {
     console.error('[Vortex] Rejected unsafe entrypoint protocol:', resolvedEntrypoint);
+    return;
+  }
+
+  // web_app manifests use the App Launcher window: external PWAs that need
+  // SharedArrayBuffer / service workers can't run inside a cross-origin-isolated
+  // iframe, so we show an info card + "Open App ↗" link to a new tab instead.
+  if (manifest.web_app) {
+    openWebApp(
+      manifest.name,
+      resolvedEntrypoint,
+      'linear-gradient(145deg, #bf5af2, #8944c0)',
+      '🌐',
+      manifest.description || ''
+    );
     return;
   }
 
@@ -233,6 +320,8 @@ browserDockBtn.addEventListener('click', openBrowser);
 terminalDockBtn.addEventListener('click', openTerminal);
 addDockBtn.addEventListener('click', openAddAppModal);
 document.getElementById('monitor-desktop-btn').addEventListener('click', openMonitor);
+document.getElementById('search-dock-btn').addEventListener('click', openSearch);
+document.getElementById('markdown-editor-desktop-btn').addEventListener('click', openMarkdownEditor);
 
 cancelModalBtn.addEventListener('click', () => {
   modal.style.display = 'none';
@@ -537,6 +626,12 @@ desktopContextPanel.addEventListener('click', (e) => {
       break;
     case 'notes':
       openNotes();
+      break;
+    case 'search':
+      openSearch();
+      break;
+    case 'markdown-editor':
+      openMarkdownEditor();
       break;
     case 'refresh':
       renderInstalledApps();

@@ -178,10 +178,14 @@ function sanitizeManifest(raw, manifestUrl) {
     allowSameOrigin: false
   };
 
+  // web_app: true → launchPlugin bypasses PluginHarness and opens the
+  // entrypoint in an unsandboxed system window (for trusted external PWAs).
+  const web_app = raw.web_app === true;
+
   // Store the fully-resolved absolute URL so launchPlugin never needs to
   // re-resolve a relative path against a manifestUrl, closing the supply-chain
   // attack where a CDN package update silently changes the entrypoint.
-  return { id, name, version, entrypoint: resolvedEntrypoint.href, permissions, sandbox };
+  return { id, name, version, entrypoint: resolvedEntrypoint.href, permissions, sandbox, web_app };
 }
 
 // Public entry point: validate origin -> fetch (direct or proxied) -> parse ->

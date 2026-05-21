@@ -271,6 +271,8 @@
     .icon-monitor   { background: linear-gradient(145deg, #ff9f0a, #b86e00); }
     .icon-plugin    { background: linear-gradient(145deg, #bf5af2, #8944c0); }
     .icon-add       { background: linear-gradient(145deg, #636366, #3a3a3c); }
+    .icon-search    { background: linear-gradient(145deg, #64d2ff, #1a9ef8); }
+    .icon-webapp    { background: linear-gradient(145deg, #32ade6, #0a74d8); }
 
     .icon-label {
       font-size: 12px;
@@ -736,6 +738,10 @@
 
   <!-- Desktop Icons -->
   <div id="desktop">
+    <button type="button" class="desktop-icon" id="markdown-editor-desktop-btn" aria-label="Open Markdown Editor">
+      <span class="icon-img squircle icon-webapp">📝</span>
+      <span class="icon-label">Markdown Editor</span>
+    </button>
     <button type="button" class="desktop-icon" id="monitor-desktop-btn" aria-label="Open Activity Monitor">
       <span class="icon-img squircle icon-monitor">📊</span>
       <span class="icon-label">Activity Monitor</span>
@@ -782,6 +788,8 @@
     <button type="button" class="context-panel-item" role="menuitem" data-context-action="terminal">Open Terminal</button>
     <button type="button" class="context-panel-item" role="menuitem" data-context-action="monitor">Open Activity Monitor</button>
     <button type="button" class="context-panel-item" role="menuitem" data-context-action="notes">Open Vortex Notes</button>
+    <button type="button" class="context-panel-item" role="menuitem" data-context-action="search">Open Search</button>
+    <button type="button" class="context-panel-item" role="menuitem" data-context-action="markdown-editor">Open Markdown Editor</button>
     <div class="context-panel-sep" role="separator"></div>
     <button type="button" class="context-panel-item" role="menuitem" data-context-action="refresh">Refresh Desktop</button>
     <button type="button" class="context-panel-item" role="menuitem" data-context-action="settings">System Settings...</button>
@@ -832,6 +840,7 @@
       <button type="button" class="dock-app" id="files-dock-btn" title="Files" aria-label="Open Files"><span class="squircle icon-files">📂</span></button>
       <button type="button" class="dock-app" id="browser-dock-btn" title="Browser" aria-label="Open Browser"><span class="squircle icon-browser">🌐</span></button>
       <button type="button" class="dock-app" id="terminal-dock-btn" title="Terminal" aria-label="Open Terminal"><span class="squircle icon-terminal">💻</span></button>
+      <button type="button" class="dock-app" id="search-dock-btn" title="Search" aria-label="Open Search"><span class="squircle icon-search">🔍</span></button>
       <div class="dock-divider"></div>
       <button type="button" class="dock-app" id="add-app-dock-btn" title="Add Sandboxed App" aria-label="Add Sandboxed App"><span class="squircle icon-add">➕</span></button>
     </div>

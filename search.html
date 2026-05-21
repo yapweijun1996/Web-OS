@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <title>Search</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #1a1a1c;
+      color: #f2f2f7;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Search bar header */
+    #search-header {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      background: rgba(40, 40, 42, 0.85);
+      border-bottom: 0.5px solid rgba(255, 255, 255, 0.1);
+    }
+
+    #search-form {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 0.5px solid rgba(255, 255, 255, 0.14);
+      border-radius: 999px;
+      padding: 5px 12px;
+      transition: border-color 0.15s;
+    }
+
+    #search-form:focus-within {
+      border-color: #0a84ff;
+      box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25);
+    }
+
+    .search-icon {
+      flex-shrink: 0;
+      color: #98989f;
+      line-height: 1;
+    }
+
+    #query {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #f2f2f7;
+      font-size: 13px;
+      min-width: 0;
+    }
+
+    #query::placeholder { color: #636366; }
+
+    #search-btn {
+      flex-shrink: 0;
+      padding: 4px 10px;
+      background: #0a84ff;
+      color: #fff;
+      border: none;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    #search-btn:hover { background: #228cff; }
+    #search-btn:active { background: #0070d8; }
+
+    /* Category chips */
+    #categories {
+      flex-shrink: 0;
+      display: flex;
+      gap: 6px;
+      padding: 8px 12px;
+      background: rgba(28, 28, 30, 0.9);
+      border-bottom: 0.5px solid rgba(255, 255, 255, 0.07);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    #categories::-webkit-scrollbar { display: none; }
+
+    .cat-btn {
+      flex-shrink: 0;
+      padding: 4px 12px;
+      border: 0.5px solid rgba(255, 255, 255, 0.14);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.07);
+      color: #ebebf5;
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+
+    .cat-btn:hover { background: rgba(255, 255, 255, 0.16); }
+    .cat-btn.active {
+      background: #0a84ff;
+      border-color: #0a84ff;
+      color: #fff;
+    }
+
+    /* Results frame */
+    #results-frame {
+      flex: 1;
+      border: none;
+      background: #fff;
+    }
+
+    /* Home screen shown before first search */
+    #home {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      padding: 32px 24px;
+    }
+
+    #home h1 {
+      font-size: 22px;
+      font-weight: 600;
+      margin: 0;
+      color: #f2f2f7;
+    }
+
+    #home p {
+      font-size: 13px;
+      color: #98989f;
+      margin: 0;
+      text-align: center;
+      line-height: 1.55;
+    }
+
+    .quick-links {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .quick-link {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 12px 8px;
+      border: 0.5px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.06);
+      color: #ebebf5;
+      font-size: 11px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.12s;
+      text-align: center;
+    }
+
+    .quick-link:hover { background: rgba(255, 255, 255, 0.14); }
+    .quick-link-icon { font-size: 22px; }
+  </style>
+</head>
+<body>
+  <div id="search-header">
+    <form id="search-form" onsubmit="doSearch(); return false;">
+      <span class="search-icon">
+        <svg width="13" height="13" viewBox="0 0 16 16"><circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="10" y1="10" x2="14.5" y2="14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </span>
+      <input id="query" type="text" placeholder="Search the web..." autocomplete="off" spellcheck="false">
+      <button type="submit" id="search-btn">Search</button>
+    </form>
+  </div>
+
+  <div id="categories">
+    <button class="cat-btn active" data-cat="">All</button>
+    <button class="cat-btn" data-cat="images">Images</button>
+    <button class="cat-btn" data-cat="videos">Videos</button>
+    <button class="cat-btn" data-cat="news">News</button>
+    <button class="cat-btn" data-cat="science">Science</button>
+    <button class="cat-btn" data-cat="it">IT</button>
+    <button class="cat-btn" data-cat="map">Maps</button>
+  </div>
+
+  <div id="home">
+    <h1>Search</h1>
+    <p>Powered by SearXNG · private, self-hosted web search</p>
+    <div class="quick-links">
+      <button class="quick-link" onclick="fillAndSearch('Vortex OS web OS')">
+        <span class="quick-link-icon">🌌</span>Vortex OS
+      </button>
+      <button class="quick-link" onclick="fillAndSearch('GitHub yapweijun1996')">
+        <span class="quick-link-icon">🐱</span>GitHub
+      </button>
+      <button class="quick-link" onclick="fillAndSearch('MDN Web Docs')">
+        <span class="quick-link-icon">📖</span>MDN Docs
+      </button>
+      <button class="quick-link" onclick="fillAndSearch('Claude AI Anthropic')">
+        <span class="quick-link-icon">🤖</span>Claude AI
+      </button>
+      <button class="quick-link" onclick="fillAndSearch('npm package registry')">
+        <span class="quick-link-icon">📦</span>npm
+      </button>
+      <button class="quick-link" onclick="fillAndSearch('CSS Tricks web dev')">
+        <span class="quick-link-icon">🎨</span>CSS Tricks
+      </button>
+    </div>
+  </div>
+
+  <iframe id="results-frame" title="Search results" style="display:none;"></iframe>
+
+  <script>
+    const SEARXNG = 'https://search.yapweijun1996.com';
+    const input   = document.getElementById('query');
+    const frame   = document.getElementById('results-frame');
+    const home    = document.getElementById('home');
+    let activeCategory = '';
+
+    document.querySelectorAll('.cat-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        activeCategory = btn.dataset.cat;
+        if (input.value.trim()) doSearch();
+      });
+    });
+
+    function buildUrl(q) {
+      const params = new URLSearchParams({ q });
+      if (activeCategory) params.set('category_general', '0'), params.set(`category_${activeCategory}`, '1');
+      return `${SEARXNG}/?${params}`;
+    }
+
+    function doSearch() {
+      const q = input.value.trim();
+      if (!q) return;
+      home.style.display = 'none';
+      frame.style.display = 'block';
+      frame.src = buildUrl(q);
+    }
+
+    function fillAndSearch(q) {
+      input.value = q;
+      doSearch();
+    }
+
+    input.focus();
+  </script>
+</body>
+</html>
