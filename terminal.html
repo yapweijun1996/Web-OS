@@ -117,8 +117,12 @@
       const prompt = () => `vortex:${cwd} $ `;
 
       term.writeln('Vortex OS Terminal');
-      term.writeln('Node/npm run in WebContainer. Python/pip run in Pyodide. Type "help".');
-      term.writeln('Type "linux" to start the optional v86 real-kernel VM when assets are installed.');
+      term.writeln('Quick start:');
+      term.writeln('  py print("hello")          # run Python inline');
+      term.writeln('  js console.log("hello")    # run Node.js inline');
+      term.writeln('  write hi.py "print(42)"    # save file, then: python hi.py');
+      term.writeln('  write hi.js "console.log(42)"   # save file, then: node hi.js');
+      term.writeln('Type "help" for all commands.');
       if (!window.crossOriginIsolated) {
         term.writeln('');
         term.writeln('[Notice] First load: the page will reload once automatically to enable WebContainer.');
@@ -404,7 +408,7 @@
         }
         const py = await getPyodide();
         py.globals.set('_vortex_packages', packages);
-        await py.runPythonAsync('import micropip\\nawait micropip.install(list(_vortex_packages))');
+        await py.runPythonAsync('import micropip\nawait micropip.install(list(_vortex_packages))');
         term.writeln(`installed ${packages.join(', ')}`);
       }
 
@@ -470,11 +474,19 @@
 
         switch (command) {
           case 'help':
-            term.writeln('Commands: help, clear, date, pwd, cd, ls, cat, append, echo, write, whoami, uname, storage');
-            term.writeln('Node: node -v | node index.js | npm -v | npm install <pkg> | npm i -g <pkg> | <global-bin>');
-            term.writeln('Codex: codex explains the browser WebContainer native-binary limitation.');
-            term.writeln('Python: python -V | python -c "print(123)" | write hello.py "print(123)" | python hello.py | pip install <pkg>');
-            term.writeln('VM: linux | linux buildroot | linux alpine | linux help');
+            term.writeln('── Inline run (no file needed) ──────────────────────────');
+            term.writeln('  py <code>          python -c shorthand  e.g. py print(42)');
+            term.writeln('  js <code>          node -e shorthand    e.g. js console.log(42)');
+            term.writeln('── File workflow ────────────────────────────────────────');
+            term.writeln('  write <file> "<content>"   save to VFS (use \\n for newlines)');
+            term.writeln('  python hello.py | node app.js | cat hello.py | ls');
+            term.writeln('── Python (Pyodide 3.13) ────────────────────────────────');
+            term.writeln('  python -V | python -c "..." | python hello.py | pip install <pkg>');
+            term.writeln('── Node.js (WebContainer v22) ───────────────────────────');
+            term.writeln('  node -v | node -e "..." | node app.js | npm install <pkg> | npm i -g <pkg>');
+            term.writeln('── Other ────────────────────────────────────────────────');
+            term.writeln('  clear, date, pwd, cd, ls, cat, echo, whoami, storage');
+            term.writeln('  linux | linux alpine    (optional v86 real-kernel VM)');
             break;
 
           case 'clear':
@@ -548,9 +560,12 @@
             const contents = args.join(' ');
             if (!path || !contents) {
               term.writeln('write: usage: write <file> <content>');
+              term.writeln('       use \\n inside content for newlines, e.g.:');
+              term.writeln('       write hello.py "def hi():\\n    print(42)\\nhi()"');
               break;
             }
-            await saveRuntimeFile(path, contents + '\n');
+            // unescape \n → real newline so multi-line files are possible
+            await saveRuntimeFile(path, contents.replace(/\\n/g, '\n') + '\n');
             break;
           }
 
@@ -578,7 +593,32 @@
             break;
           }
 
-          case 'node':
+          case 'py':
+            if (!args.length) { term.writeln('Usage: py <code>   e.g. py print(42)'); break; }
+            await runPythonCommand(['-c', args.join(' ')]);
+            break;
+
+          case 'js':
+            if (!args.length) { term.writeln('Usage: js <code>   e.g. js console.log(42)'); break; }
+            await runWebContainerCommand('node', ['-e', args.join(' ')]);
+            break;
+
+          case 'node': {
+            // Friendly pre-check: if first arg looks like a filename (no flag), verify it's in VFS
+            const fileArg = args[0];
+            if (fileArg && !fileArg.startsWith('-')) {
+              const filePath = normalizeRuntimePath(fileArg);
+              if (!runtimeFiles.has(filePath)) {
+                term.writeln(`node: cannot open '${fileArg}' — file not in VFS.`);
+                term.writeln(`  Create it first: write ${fileArg} "console.log('hello')"`);
+                term.writeln(`  Or run inline:   js console.log('hello')`);
+                break;
+              }
+            }
+            await runWebContainerCommand('node', args);
+            break;
+          }
+
           case 'npm':
           case 'npx':
             await runWebContainerCommand(command, args);
