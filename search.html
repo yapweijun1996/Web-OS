@@ -264,6 +264,19 @@
       width: 100%;
     }
 
+    .app-tile-add {
+      border: 0.5px dashed rgba(255, 255, 255, 0.22);
+      background: transparent;
+      color: #98989f;
+    }
+    .app-tile-add:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(255,255,255,.35); color: #f2f2f7; }
+
+    .app-tile-add .app-tile-icon {
+      background: rgba(255, 255, 255, 0.07);
+      box-shadow: none;
+      font-size: 20px;
+    }
+
     /* Manage mode */
     .apps-grid.manage-mode .app-tile { position: relative; }
 
@@ -547,7 +560,7 @@
       if (!webApps.length) { appsSection.style.display = 'none'; setManageMode(false); return; }
       appsSection.style.display = 'block';
       appsGrid.innerHTML = '';
-      webApps.forEach(({ manifest }) => {
+      webApps.forEach(({ manifest, manifestUrl }) => {
         const tile = document.createElement('button');
         tile.className = 'app-tile';
         tile.title = manifest.description || manifest.name;
@@ -576,7 +589,8 @@
               manifest.entrypoint,
               'linear-gradient(145deg, #32ade6, #0a74d8)',
               manifest.icon || '🌐',
-              manifest.description || ''
+              manifest.description || '',
+              manifestUrl || ''
             );
           } else {
             window.open(manifest.entrypoint, '_blank', 'noopener');
@@ -584,6 +598,29 @@
         });
         appsGrid.appendChild(tile);
       });
+
+      // "＋ Add App" tile — always last, hidden in manage mode
+      if (!manageMode) {
+        const addTile = document.createElement('button');
+        addTile.className = 'app-tile app-tile-add';
+        addTile.title = 'Add App';
+
+        const addIcon = document.createElement('span');
+        addIcon.className = 'app-tile-icon';
+        addIcon.textContent = '＋';
+
+        const addName = document.createElement('span');
+        addName.className = 'app-tile-name';
+        addName.textContent = 'Add App';
+
+        addTile.append(addIcon, addName);
+        addTile.addEventListener('click', () => {
+          const p = window.parent;
+          if (p && typeof p.openAddAppModal === 'function') p.openAddAppModal();
+          else window.open(location.origin + '/Web-OS/', '_blank', 'noopener');
+        });
+        appsGrid.appendChild(addTile);
+      }
       // re-apply manage mode class after re-render
       appsGrid.classList.toggle('manage-mode', manageMode);
     }

@@ -162,7 +162,7 @@ function openSearch() {
 // (SharedArrayBuffer, service workers, etc.) cannot be safely embedded in
 // an iframe inside a cross-origin-isolated page. Show an App Launcher window
 // instead — the user clicks "Open App" to launch in a new tab at full fidelity.
-function openWebApp(title, url, iconGradient, emoji, description) {
+function openWebApp(title, url, iconGradient, emoji, description, manifestUrl = '') {
   // Sanitize: only allow https URLs from launchPlugin (already validated there)
   if (!url.startsWith('https://') && !url.startsWith('http://')) return;
 
@@ -197,18 +197,32 @@ function openWebApp(title, url, iconGradient, emoji, description) {
       descEl.style.cssText = 'font-size:12px;color:#98989f;max-width:260px;line-height:1.55;';
       descEl.textContent = description || 'External web application';
 
+      const isInstalled = appRegistry.list().some(a => a.manifest.entrypoint === url);
+      if (isInstalled) {
+        const badge = document.createElement('div');
+        badge.style.cssText = 'display:inline-flex;align-items:center;gap:5px;padding:5px 14px;background:rgba(48,209,88,.15);border:0.5px solid rgba(48,209,88,.4);border-radius:999px;font-size:12px;color:#30d158;font-weight:600;';
+        badge.textContent = '✓ In Vortex';
+        body.append(tile, nameEl, descEl, badge);
+      } else {
+        const addBtn = document.createElement('button');
+        addBtn.style.cssText = 'margin-top:2px;padding:7px 20px;background:rgba(255,255,255,.1);border:0.5px solid rgba(255,255,255,.2);color:#f2f2f7;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;';
+        addBtn.textContent = '+ Add to Vortex';
+        addBtn.addEventListener('click', () => openAddAppModal(manifestUrl));
+        body.append(tile, nameEl, descEl, addBtn);
+      }
+
       const link = document.createElement('a');
       link.href = url;
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
-      link.style.cssText = 'margin-top:4px;padding:10px 26px;background:#0a84ff;color:#fff;border-radius:999px;text-decoration:none;font-size:13px;font-weight:600;';
+      link.style.cssText = 'padding:10px 26px;background:#0a84ff;color:#fff;border-radius:999px;text-decoration:none;font-size:13px;font-weight:600;';
       link.textContent = 'Open App ↗';
 
       const hint = document.createElement('div');
       hint.style.cssText = 'font-size:11px;color:#636366;';
       hint.textContent = 'Opens in a new browser tab';
 
-      body.append(tile, nameEl, descEl, link, hint);
+      body.append(link, hint);
     }
   });
   win.dataset.appSrc = url;
@@ -259,7 +273,8 @@ window.launchPlugin = function(manifest, manifestUrl) {
       resolvedEntrypoint,
       'linear-gradient(145deg, #32ade6, #0a74d8)',
       manifest.icon || '🌐',
-      manifest.description || ''
+      manifest.description || '',
+      manifestUrl
     );
     return;
   }
@@ -314,10 +329,11 @@ const cancelModalBtn = document.getElementById('cancel-modal-btn');
 const installAppBtn = document.getElementById('install-app-btn');
 const manifestInput = document.getElementById('manifest-url-input');
 
-function openAddAppModal() {
+function openAddAppModal(prefillUrl = '') {
   modal.style.display = 'block';
-  manifestInput.value = window.location.origin + '/manifest.json';
+  manifestInput.value = prefillUrl || (window.location.origin + '/manifest.json');
 }
+window.openAddAppModal = openAddAppModal;
 
 dashboardDockBtn.addEventListener('click', openDashboard);
 filesDockBtn.addEventListener('click', openFiles);
