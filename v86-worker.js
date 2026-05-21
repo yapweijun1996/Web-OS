@@ -30,6 +30,17 @@ function reportProgress(message) {
   self.postMessage({ type: 'BOOT_PROGRESS', data: message });
 }
 
+self.onerror = (message, source, lineno, colno, error) => {
+  const detail = error?.message || message || `${source || 'worker'}:${lineno || 0}:${colno || 0}`;
+  reportError(`Worker runtime error: ${detail}`);
+};
+
+self.onunhandledrejection = (event) => {
+  const reason = event?.reason;
+  const detail = reason?.message || String(reason || 'unknown rejection');
+  reportError(`Worker unhandled rejection: ${detail}`);
+};
+
 function bootEmulator(resources) {
   if (emulator) {
     reportError('Emulator already booted; ignoring duplicate BOOT_EMULATOR.');

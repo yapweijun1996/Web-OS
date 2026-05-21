@@ -54,6 +54,7 @@ function rawApkMirrorPlugin() {
       res.setHeader('Content-Type', 'application/octet-stream');
       res.setHeader('Content-Length', String(stat.size));
       res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Access-Control-Allow-Origin', '*');
       createReadStream(filePath).pipe(res);
     } catch {
       next();

@@ -157,7 +157,7 @@ The profile enables v86's built-in `fetch` network relay:
 network_relay_url: 'fetch'
 ```
 
-That relay provides guest DHCP/DNS and browser-backed HTTP fetches. Direct guest HTTPS/TCP egress still requires a WISP/full TCP relay, because the fetch relay does not tunnel arbitrary port 443 connections.
+That relay provides guest DHCP/DNS and browser-backed HTTP fetches. The Alpine init script runs `udhcpc` and falls back to the relay's static network (`192.168.86.100/24`, gateway `192.168.86.1`) if no lease is present. Direct guest HTTPS/TCP egress still requires a WISP/full TCP relay, because the fetch relay does not tunnel arbitrary port 443 connections.
 
 The build script also creates a same-origin APK mirror under:
 
@@ -170,6 +170,8 @@ public/v86/apk/main/x86/
 ```text
 http://<current-port>.external/<base-path>/v86/apk/main
 ```
+
+For local preview URLs such as `http://127.0.0.1:4173`, Vortex also appends the matching `<port>.external` host alias to `/etc/hosts` and the raw APK mirror middleware sends `Access-Control-Allow-Origin: *`. This keeps v86's internal `localhost:<port>` fetch compatible with both `localhost` and `127.0.0.1` page origins.
 
 On deployed hosts such as GitHub Pages it uses the current host and base path:
 
@@ -235,4 +237,4 @@ Verified on 2026-05-21:
 - Chrome DevTools MCP confirmed `bash --version` returns GNU bash `5.3.3`.
 - Chrome DevTools MCP confirmed `curl --version` returns curl `8.19.0` with `https` protocol support and OpenSSL `3.5.6`.
 - Chrome DevTools MCP confirmed v86 fetch relay DHCP assigns `192.168.86.100` to `eth0`.
-- Chrome DevTools MCP confirmed the dynamic same-origin mirror rewrites `/etc/apk/repositories` to the active dev port and `apk update` returns `OK: 5869 distinct packages available`.
+- Chrome DevTools MCP confirmed the dynamic same-origin mirror rewrites `/etc/apk/repositories` to the active dev port, adds the local `<port>.external` host alias, and `apk update` returns `OK: 5869 distinct packages available`.

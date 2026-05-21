@@ -73,7 +73,16 @@ class V86LinuxBridge {
 
     this.worker.onerror = (err) => {
       this._setStatus('error');
-      console.error('[V86LinuxBridge] Worker crashed:', err.message);
+      const message = err?.message || err?.error?.message || `${err?.filename || 'worker'}:${err?.lineno || 0}:${err?.colno || 0}`;
+      console.error('[V86LinuxBridge] Worker crashed:', message);
+      this.broadcastToTerminals(`\r\n[Vortex OS] Linux worker crashed: ${message}\r\n`);
+    };
+
+    this.worker.onmessageerror = (err) => {
+      this._setStatus('error');
+      const message = err?.message || 'Worker message could not be deserialized.';
+      console.error('[V86LinuxBridge] Worker message error:', message);
+      this.broadcastToTerminals(`\r\n[Vortex OS] Linux worker message error: ${message}\r\n`);
     };
   }
 

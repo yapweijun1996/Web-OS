@@ -441,6 +441,22 @@
         return `http://${port}.external${base}v86/apk/main`;
       }
 
+      function localApkMirrorHostAlias() {
+        const isLocalhost = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+        if (!isLocalhost) return '';
+        const port = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
+        return `${port}.external`;
+      }
+
+      function alpineMirrorSetupCommand() {
+        const repository = localApkMirrorRepository();
+        const hostAlias = localApkMirrorHostAlias();
+        const hostsCommand = hostAlias
+          ? `grep -q ' ${hostAlias}$' /etc/hosts 2>/dev/null || printf '%s\\n' '192.168.86.1 ${hostAlias}' >> /etc/hosts; `
+          : '';
+        return `${hostsCommand}printf '%s\\n' '${repository}' > /etc/apk/repositories\r`;
+      }
+
       async function resourceAvailable(url) {
         return fetch(url, { method: 'HEAD' })
           .then((res) => res.ok)
@@ -685,10 +701,9 @@
             linuxOutputBuffer = (linuxOutputBuffer + output).slice(-1000);
             if (profileName === 'alpine' && !alpineMirrorConfigured && linuxOutputBuffer.includes('/ #')) {
               alpineMirrorConfigured = true;
-              const repository = localApkMirrorRepository();
               linuxPort.postMessage({
                 action: 'STDIN',
-                data: `printf '%s\\n' '${repository}' > /etc/apk/repositories\r`
+                data: alpineMirrorSetupCommand()
               });
             }
             if (!linuxReadyHintShown && profile.readyPatterns.some((pattern) => linuxOutputBuffer.includes(pattern))) {
@@ -697,11 +712,10 @@
               profile.readyMessage.forEach((message) => term.writeln(message));
               if (profileName === 'alpine' && !alpineMirrorConfigured) {
                 alpineMirrorConfigured = true;
-                const repository = localApkMirrorRepository();
                 window.setTimeout(() => {
                   linuxPort?.postMessage({
                     action: 'STDIN',
-                    data: `printf '%s\\n' '${repository}' > /etc/apk/repositories\r`
+                    data: alpineMirrorSetupCommand()
                   });
                 }, 500);
               }

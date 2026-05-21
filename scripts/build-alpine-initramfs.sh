@@ -107,6 +107,10 @@ printf '%s\n' \
   'ip link set eth0 up 2>/dev/null || true' \
   'ifconfig lo up 2>/dev/null || true' \
   'ifconfig eth0 up 2>/dev/null || true' \
+  'if command -v udhcpc >/dev/null 2>&1; then udhcpc -i eth0 -q -n -t 5 -T 1 >/dev/null 2>&1 || true; fi' \
+  'if ! ip -4 addr show dev eth0 2>/dev/null | grep -q "inet "; then ip addr add 192.168.86.100/24 dev eth0 2>/dev/null || ifconfig eth0 192.168.86.100 netmask 255.255.255.0 2>/dev/null || true; fi' \
+  'ip route replace default via 192.168.86.1 dev eth0 2>/dev/null || route add default gw 192.168.86.1 eth0 2>/dev/null || true' \
+  'printf "%s\n" "nameserver 192.168.86.1" > /etc/resolv.conf 2>/dev/null || true' \
   'export HOME=/root' \
   'export PATH=/sbin:/bin:/usr/sbin:/usr/bin' \
   'if [ -c /dev/ttyS0 ]; then' \

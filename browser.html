@@ -268,10 +268,11 @@
       'github.com',
       'google.com',
       'openai.com',
-      'vercel.com'
+      'vercel.com',
+      'yapweijun1996.com'
     ]);
     const DEFAULT_SITES = [
-      { id: 'yapweijun', title: 'Yap Wei Jun', url: 'https://yapweijun1996.com/', icon: 'YW', defaultMode: 'embed' },
+      { id: 'yapweijun', title: 'Yap Wei Jun', url: 'https://yapweijun1996.com/', icon: 'YW', defaultMode: 'tab', externalOnly: true },
       { id: 'github-profile', title: 'GitHub Profile', url: 'https://github.com/yapweijun1996', icon: 'GH', defaultMode: 'tab', externalOnly: true },
       { id: 'github', title: 'GitHub', url: 'https://github.com/', icon: 'GH', defaultMode: 'tab', externalOnly: true },
       { id: 'openai', title: 'OpenAI', url: 'https://openai.com/', icon: 'AI', defaultMode: 'tab', externalOnly: true },
@@ -447,6 +448,10 @@
       setStatus(`Loading ${new URL(target).hostname}`);
     }
 
+    function navigateSite(site, { openBlocked = true } = {}) {
+      navigate(site.url, { mode: siteMode(site), openBlocked });
+    }
+
     function renderBookmarkEditor() {
       const editor = document.createElement('div');
       editor.className = 'bookmark-editor';
@@ -495,11 +500,11 @@
         item.title = site.url;
         item.tabIndex = 0;
         item.setAttribute('role', 'button');
-        item.addEventListener('click', () => navigate(site.url, { mode, openBlocked: true }));
+        item.addEventListener('click', () => navigateSite(site));
         item.addEventListener('keydown', (event) => {
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
-            navigate(site.url, { mode, openBlocked: true });
+            navigateSite(site);
           }
         });
 
@@ -586,7 +591,7 @@
       setStatus('Reloading page');
     });
 
-    homeBtn.addEventListener('click', () => navigate(DEFAULT_SITES[0].url));
+    homeBtn.addEventListener('click', () => navigateSite(DEFAULT_SITES[0], { openBlocked: false }));
     externalBtn.addEventListener('click', () => {
       openExternal(normalizeTarget(input.value));
     });
@@ -597,7 +602,7 @@
     });
 
     renderSuggestions();
-    navigate(DEFAULT_SITES[0].url);
+    navigateSite(DEFAULT_SITES[0], { openBlocked: false });
   </script>
 </body>
 </html>

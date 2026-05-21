@@ -267,13 +267,14 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
 * **Description**: The Alpine initramfs now includes bash, curl, CA certificates, apk, and v86 fetch-relay DHCP. Live `apk update` works through a same-origin APK mirror. Direct guest `curl https://...` still requires an operator-provided WISP/full TCP relay endpoint because fetch relay does not tunnel arbitrary port 443 traffic.
 * **Acceptance Criteria**:
   - `linux alpine` can run `apk update` without manual mirror/proxy setup.
+  - Alpine boots with IPv4 networking and a default route even when DHCP lease setup is delayed.
   - Guest full-TCP relay can be selected through a documented WISP relay path.
   - Terminal docs explain how to configure or operate the relay in development and production.
 * **Verification**:
   - `scripts/build-alpine-initramfs.sh` writes a same-origin mirror under `public/v86/apk/main/x86/`.
-  - `vite.config.js` serves `/v86/apk/*` and `/Web-OS/v86/apk/*` as raw octet-stream files so `.tar.gz` is not decompressed by browser fetch.
-  - `terminal.html` rewrites `/etc/apk/repositories` to the active base-path-aware same-origin mirror after Alpine reaches the shell prompt.
-  - Chrome DevTools MCP verified `apk update` returns `OK: 5869 distinct packages available` on `http://localhost:5178/Web-OS/terminal.html`.
+  - `vite.config.js` serves `/v86/apk/*` and `/Web-OS/v86/apk/*` as raw octet-stream files with CORS enabled so `.tar.gz` is not browser-decompressed before v86 fetch relay consumes it.
+  - `terminal.html` rewrites `/etc/apk/repositories` to the active base-path-aware same-origin mirror and adds the local `<port>.external` host alias after Alpine reaches the shell prompt.
+  - Chrome DevTools MCP verified `linux alpine` on `http://127.0.0.1:4173/Web-OS/terminal.html` assigns `192.168.86.100/24`, installs a default route via `192.168.86.1`, and `apk update` returns `OK: 5869 distinct packages available`.
   - `linux alpine wisp://host:port` and `linux alpine wisps://host:port` are accepted as v86 WISP relay configuration routes.
 
 ### 🎫 Issue Key: VORTEX-129
@@ -333,6 +334,7 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
   - Chrome DevTools MCP verified the address bar normalizes `github.com/yapweijun1996` to `https://github.com/yapweijun1996` and search terms to a Google search URL.
   - Chrome DevTools MCP verified the Dock Browser button opens a focused Browser window with `browser.html` and active Dock state.
   - Chrome DevTools MCP verified per-bookmark Embed/Tab mode defaults, persisted mode changes, GitHub iframe-blocked messaging, custom bookmark creation, and custom bookmark deletion.
+  - Chrome DevTools MCP verified Yap Wei Jun defaults to Tab mode to avoid iframe sandbox CORS/service-worker failures.
 
 ---
 
