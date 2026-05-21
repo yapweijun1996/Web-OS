@@ -35,3 +35,6 @@ Icon
 # Vite cache directory
 .vite/
 .gstack/
+
+# Codex local review screenshots and browser test artifacts
+.codex/
