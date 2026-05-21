@@ -4,11 +4,11 @@
 
 `browser.html` is a first-party system app for quick web navigation inside Vortex OS. It provides:
 
-- an address/search bar
-- Back, Forward, Reload, Home, and Open in New Tab controls
-- default website suggestions
-- per-bookmark Embed or Tab mode
-- custom bookmark add/delete stored in browser local storage
+- a Chrome-like tab strip with active tab, close tab, and new tab controls
+- a compact toolbar with Back, Forward, Reload, Home, omnibox, bookmark, external-open, and menu controls
+- a New Tab shortcuts surface for default website suggestions
+- per-bookmark Embed or Tab mode through a bookmark settings dialog
+- custom bookmark add/delete stored in browser local storage through the Browser menu
 
 The Vite multi-page build emits `dist/browser.html`, and the app can be opened from the Dock or the desktop context menu.
 
@@ -51,6 +51,22 @@ localStorage.vortex_browser_custom_sites
 
 Custom bookmark URLs are normalized so bare domains such as `example.com` become `https://example.com`, while non-domain search text becomes a Google search URL.
 
+## Chrome-Like Layout
+
+The Browser shell is organized as:
+
+```text
+tab strip -> toolbar / omnibox -> content viewport
+```
+
+Default suggestions are visible on the New Tab surface only. After navigation, the New Tab surface is hidden and the iframe or external-only panel owns the content viewport. Bookmark creation is available from the Browser menu, while per-bookmark Embed/Tab settings live in the bookmark settings dialog opened from a shortcut card menu.
+
+The external-only panel provides recovery actions:
+
+- Open in Tab
+- Copy URL
+- Back to New Tab
+
 ## Iframe Security Limits
 
 The Browser app is still a frontend web app, not a native browser engine. Some websites cannot be displayed inside the Web OS iframe because the remote site sends browser-enforced anti-framing headers.
@@ -79,11 +95,13 @@ npm run dev -- --port 5182 --host 127.0.0.1
 Then verify in Chrome DevTools MCP:
 
 - `browser.html` loads and starts at `https://yapweijun1996.com/`.
-- default suggestions render with expected Embed/Tab modes.
-- a custom bookmark can be added, switched to Tab mode, persisted, and deleted.
+- loaded-page content viewport is at least 70% of desktop height and 65% of mobile height.
+- New Tab shortcuts render with expected Embed/Tab modes.
+- a custom bookmark can be added through the Browser menu, switched to Tab mode in the settings dialog, persisted, and deleted.
 - GitHub Profile in Embed mode shows the blocked-embedding panel.
+- GitHub Profile in Tab mode shows Open in Tab, Copy URL, and Back to New Tab actions.
 - the console has no app-blocking uncaught exceptions.
 
 ## Chrome UI Review
 
-The current Browser app is functional but is not yet Chrome-like in layout. See [`browser-chrome-ui-review.md`](browser-chrome-ui-review.md) for the live Chrome DevTools MCP audit and redesign backlog.
+The Chrome-like redesign was implemented after the 2026-05-21 audit. See [`browser-chrome-ui-review.md`](browser-chrome-ui-review.md) for the original findings and follow-up verification notes.

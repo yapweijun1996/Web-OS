@@ -342,9 +342,9 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
 * **Summary**: Redesign Browser App To Follow Chrome-Like UI
 * **Issue Type**: Story
 * **Priority**: High
-* **Status**: To Do
+* **Status**: Done
 * **Epic**: System Apps
-* **Description**: The Browser app is functional, but the current layout behaves more like a website launcher than a Chrome-like browser. The persistent suggestions grid and bookmark editor consume too much viewport, the app has no tab strip or tab model, and mobile browsing is nearly blocked by layout height. See `docs/browser-chrome-ui-review.md`.
+* **Description**: The Browser app is functional, but the previous layout behaved more like a website launcher than a Chrome-like browser. The redesign replaces the persistent suggestions grid with a tab strip, compact toolbar, New Tab shortcuts surface, menu/dialog bookmark management, and a content-first viewport. See `docs/browser-chrome-ui-review.md`.
 * **Acceptance Criteria**:
   - Add a Chrome-like tab strip above the toolbar with active tab, close tab, and new tab controls.
   - Keep the toolbar compact with Back, Forward, Reload-or-Stop, Home, omnibox, bookmark/star, external-open, and overflow menu controls.
@@ -356,7 +356,12 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
   - Chrome DevTools MCP audit captured desktop and mobile evidence in `docs/browser-chrome-ui-review.md`.
   - Desktop baseline measured suggestions at about `290px` and content at about `395px` in a `733px` viewport.
   - Mobile baseline measured suggestions at about `658.5px` and content at about `26.5px` in a `733px` viewport.
-  - Console review found no app-blocking exception during the Browser app audit; remaining issues are documented as accessibility and sandbox warnings.
+  - Implemented a Chrome-like tab strip, compact toolbar, New Tab shortcuts surface, Browser menu bookmark creation, bookmark settings dialog, and external-only recovery actions.
+  - `npm run build` completed successfully.
+  - Chrome DevTools MCP verified desktop loaded-page content viewport at about `89.1%` of viewport height.
+  - Chrome DevTools MCP verified mobile loaded-page content viewport at about `90.3%` of viewport height.
+  - Chrome DevTools MCP verified New Tab renders `9` shortcuts and GitHub Profile external-only panel exposes Open in Tab, Copy URL, and Back to New Tab.
+  - Chrome DevTools MCP verified custom bookmark add, Tab-mode persistence, delete, and mode cleanup through the Browser menu and settings dialog.
 
 ---
 

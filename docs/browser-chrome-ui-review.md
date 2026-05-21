@@ -172,3 +172,22 @@ Recommended fix:
 - The omnibox is the primary URL/search control and supports Enter-to-navigate.
 - New-tab shortcuts are visible only on new-tab/blank state or via an explicit bookmarks action.
 - Console contains no app-blocking errors after loading an embeddable site and an external-only site.
+
+## VORTEX-131 Implementation Notes
+
+Implemented on 2026-05-21:
+
+- Replaced the launcher-style always-visible suggestions layout with a Chrome-like shell: tab strip, compact toolbar, omnibox, and content viewport.
+- Added active tab, close tab, and new tab controls.
+- Moved default suggestions into the New Tab surface only.
+- Moved custom bookmark creation into the Browser menu.
+- Moved per-bookmark Embed/Tab controls into a settings dialog opened from each shortcut card.
+- Added external-only recovery actions: Open in Tab, Copy URL, and Back to New Tab.
+
+Post-change Chrome DevTools MCP checks:
+
+- Desktop loaded-page content viewport measured `713px` of `800px`, about `89.1%`.
+- Mobile loaded-page content viewport measured `762px` of `844px`, about `90.3%`.
+- New Tab surface measured the full workspace height and rendered all `9` default shortcuts.
+- External-only GitHub Profile panel rendered Open in Tab, Copy URL, and Back to New Tab actions.
+- Custom bookmark add, Tab-mode persistence, delete, and mode cleanup were verified through the Browser menu and settings dialog.
