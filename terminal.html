@@ -5,8 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- Cross-origin isolation shim so WebContainer works when this page is
        opened standalone, not just as an iframe inside the COI host. -->
-  <script type="module" src="./coi-loader.js"></script>
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <script type="module">
+    if (location.protocol === 'http:' || location.protocol === 'https:') {
+      import('./coi-loader.js');
+    }
+  </script>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <title>Terminal</title>
   <style>
     html, body { margin: 0; height: 100%; background: #1e1e2e; }
@@ -28,18 +32,12 @@
     binaries no longer leave the terminal unusable.
   -->
   <script type="module">
-    import { Terminal } from '@xterm/xterm';
-    import { FitAddon } from '@xterm/addon-fit';
-    import '@xterm/xterm/css/xterm.css';
-    import { WebContainer } from '@webcontainer/api';
-    import { CompressedStorageEngine } from './jsonl-storage-engine.js';
-    import { V86LinuxBridge } from './v86-bridge.js';
-
     const PYODIDE_MODULE_URL = 'https://cdn.jsdelivr.net/pyodide/v0.29.4/full/pyodide.mjs';
     const PYODIDE_INDEX_URL = 'https://cdn.jsdelivr.net/pyodide/v0.29.4/full/';
     const NPM_GLOBAL_PREFIX = '/home/.npm-global';
     const NPM_CACHE_DIR = '/home/.npm';
-    const V86_BASE = import.meta.env.BASE_URL + 'v86/';
+    const APP_BASE = import.meta.env?.BASE_URL || './';
+    const V86_BASE = APP_BASE + 'v86/';
     const LINUX_PROFILES = {
       buildroot: {
         name: 'Buildroot',
@@ -80,8 +78,166 @@
       }
     };
     let loadPyodideModule = null;
+    let WebContainerRuntime = null;
+    let V86LinuxBridgeRuntime = null;
+    let terminalRuntimeMode = 'full';
+
+    class BasicTerminal {
+      constructor() {
+        this.cols = 80;
+        this.rows = 24;
+        this._onData = null;
+        this._screen = null;
+        this._buffer = '';
+      }
+
+      loadAddon() {}
+
+      open(element) {
+        this._screen = document.createElement('pre');
+        this._screen.tabIndex = 0;
+        this._screen.setAttribute('role', 'textbox');
+        this._screen.setAttribute('aria-label', 'Terminal input');
+        this._screen.style.margin = '0';
+        this._screen.style.height = '100%';
+        this._screen.style.overflow = 'auto';
+        this._screen.style.whiteSpace = 'pre-wrap';
+        this._screen.style.outline = 'none';
+        this._screen.style.font = '13px Menlo, Monaco, "Courier New", monospace';
+        this._screen.style.color = '#cdd6f4';
+        this._screen.style.background = '#1e1e2e';
+        element.replaceChildren(this._screen);
+        this._screen.addEventListener('keydown', (event) => this._handleKey(event));
+        this._screen.focus();
+      }
+
+      onData(callback) {
+        this._onData = callback;
+      }
+
+      write(value = '') {
+        for (const char of String(value).replace(/\r/g, '')) {
+          if (char === '\b') this._buffer = this._buffer.slice(0, -1);
+          else this._buffer += char;
+        }
+        this._render();
+      }
+
+      writeln(value = '') {
+        this.write(`${value}\n`);
+      }
+
+      clear() {
+        this._buffer = '';
+        this._render();
+      }
+
+      _render() {
+        if (!this._screen) return;
+        this._screen.textContent = this._buffer;
+        this._screen.scrollTop = this._screen.scrollHeight;
+      }
+
+      _handleKey(event) {
+        if (!this._onData) return;
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          this._onData('\r');
+        } else if (event.key === 'Backspace') {
+          event.preventDefault();
+          this._onData('\u007f');
+        } else if (event.key === 'c' && event.ctrlKey) {
+          event.preventDefault();
+          this._onData('\u0003');
+        } else if (event.key.length === 1 && !event.metaKey && !event.ctrlKey) {
+          event.preventDefault();
+          this._onData(event.key);
+        }
+      }
+    }
+
+    class LocalStorageEngine {
+      constructor() {
+        this.key = 'vortex_terminal_direct_files';
+      }
+
+      async init() {}
+
+      _readAll() {
+        try {
+          return JSON.parse(localStorage.getItem(this.key) || '{}');
+        } catch {
+          return {};
+        }
+      }
+
+      _writeAll(value) {
+        localStorage.setItem(this.key, JSON.stringify(value));
+      }
+
+      async listFiles(path = '/') {
+        const prefix = path === '/' ? '/' : path.replace(/\/$/, '') + '/';
+        return Object.keys(this._readAll()).filter((file) => file === path || file.startsWith(prefix));
+      }
+
+      async appendToGzFile(path, line) {
+        const files = this._readAll();
+        const current = files[path] ? `${files[path]}\n` : '';
+        files[path] = `${current}${line}`;
+        this._writeAll(files);
+      }
+
+      async readGzFileLines(path) {
+        const value = this._readAll()[path];
+        if (!value) return [];
+        return value.split('\n').filter(Boolean).map((line) => {
+          try {
+            return JSON.parse(line);
+          } catch {
+            return line;
+          }
+        });
+      }
+    }
+
+    async function loadTerminalRuntime() {
+      if (location.protocol === 'file:') {
+        terminalRuntimeMode = 'direct-file';
+        return {
+          Terminal: BasicTerminal,
+          FitAddon: class { fit() {} },
+          StorageEngine: LocalStorageEngine
+        };
+      }
+      try {
+        const [{ Terminal }, { FitAddon }, { WebContainer }, { CompressedStorageEngine }, { V86LinuxBridge }] = await Promise.all([
+          import('@xterm/xterm'),
+          import('@xterm/addon-fit'),
+          import('@webcontainer/api'),
+          import('./jsonl-storage-engine.js'),
+          import('./v86-bridge.js')
+        ]);
+        try {
+          await import('@xterm/xterm/css/xterm.css');
+        } catch {
+          // CSS import is a Vite convenience. The terminal remains usable without it.
+        }
+        WebContainerRuntime = WebContainer;
+        V86LinuxBridgeRuntime = V86LinuxBridge;
+        return { Terminal, FitAddon, StorageEngine: CompressedStorageEngine };
+      } catch (err) {
+        terminalRuntimeMode = 'direct-file';
+        console.warn('[Terminal] Full runtime unavailable; using direct-file fallback.', err);
+        return {
+          Terminal: BasicTerminal,
+          FitAddon: class { fit() {} },
+          StorageEngine: LocalStorageEngine
+        };
+      }
+    }
 
     async function main() {
+      const { Terminal, FitAddon, StorageEngine } = await loadTerminalRuntime();
       // --- Terminal emulator UI ---
       const term = new Terminal({
         fontFamily: 'Menlo, Monaco, "Courier New", monospace',
@@ -96,12 +252,12 @@
       fitAddon.fit();
       window.addEventListener('resize', () => {
         fitAddon.fit();
-        if (runningProcess) {
+        if (runningProcess?.resize) {
           runningProcess.resize({ cols: term.cols, rows: term.rows });
         }
       });
 
-      const storage = new CompressedStorageEngine();
+      const storage = new StorageEngine();
       await storage.init();
 
       let mode = 'shell';
@@ -123,7 +279,12 @@
       term.writeln('  write hi.py "print(42)"    # save file, then: python hi.py');
       term.writeln('  write hi.js "console.log(42)"   # save file, then: node hi.js');
       term.writeln('Type "help" for all commands.');
-      if (!window.crossOriginIsolated) {
+      if (terminalRuntimeMode === 'direct-file') {
+        term.writeln('');
+        term.writeln('[Fallback] Running without Vite/WebContainer. Basic shell, VFS, Python, and browser JS are available.');
+        term.writeln('[Fallback] Node/npm/v86 need HTTP serving: npm run dev or npm run preview.');
+      }
+      if (terminalRuntimeMode === 'full' && !window.crossOriginIsolated) {
         term.writeln('');
         term.writeln('[Notice] First load: the page will reload once automatically to enable WebContainer.');
         term.writeln('[Notice] Node/npm will be available after the reload — this only happens once per browser.');
@@ -173,13 +334,18 @@
 
       async function getWebContainer() {
         if (webcontainer) return webcontainer;
+        if (!WebContainerRuntime) {
+          term.writeln('Node/npm are unavailable in direct-file fallback mode.');
+          term.writeln('Run the project through HTTP for full Terminal support: npm run dev -- --host 127.0.0.1');
+          throw new Error('WebContainer runtime unavailable.');
+        }
         if (!window.crossOriginIsolated) {
           term.writeln('[Vortex] Cross-origin isolation is not yet active.');
           term.writeln('[Vortex] The page will reload automatically once the service worker activates — please wait a moment.');
           throw new Error('Not cross-origin isolated. Page will reload automatically.');
         }
         term.writeln('Booting WebContainer Node.js runtime...');
-        webcontainer = await WebContainer.boot({ coep: 'credentialless', workdirName: 'vortex' });
+        webcontainer = await WebContainerRuntime.boot({ coep: 'credentialless', workdirName: 'vortex' });
         await webcontainer.mount({
           'package.json': {
             file: {
@@ -375,6 +541,30 @@
         }
       }
 
+      async function runBrowserJavaScript(args) {
+        const isNodeEval = args[0] === '-e';
+        const code = isNodeEval ? args.slice(1).join(' ') : args.join(' ');
+        if (!code) {
+          term.writeln('js: missing code');
+          return;
+        }
+        const browserConsole = {
+          log: (...values) => term.writeln(values.map(String).join(' ')),
+          error: (...values) => term.writeln(values.map(String).join(' ')),
+          warn: (...values) => term.writeln(values.map(String).join(' '))
+        };
+        const result = await Function('console', `"use strict"; return (async () => { ${code} })();`)(browserConsole);
+        if (result !== undefined) term.writeln(String(result));
+      }
+
+      async function runJavaScriptCommand(args) {
+        if (WebContainerRuntime && window.crossOriginIsolated) {
+          await runWebContainerCommand('node', args);
+          return;
+        }
+        await runBrowserJavaScript(args);
+      }
+
       async function runPythonCommand(args) {
         const py = await getPyodide();
         if (!args.length || args[0] === '-V' || args[0] === '--version') {
@@ -435,7 +625,7 @@
       }
 
       function localApkMirrorRepository() {
-        const basePath = import.meta.env.BASE_URL;
+        const basePath = APP_BASE;
         const base = basePath.endsWith('/') ? basePath : `${basePath}/`;
         const isLocalhost = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
         if (!isLocalhost) {
@@ -600,7 +790,7 @@
 
           case 'js':
             if (!args.length) { term.writeln('Usage: js <code>   e.g. js console.log(42)'); break; }
-            await runWebContainerCommand('node', ['-e', args.join(' ')]);
+            await runJavaScriptCommand(['-e', args.join(' ')]);
             break;
 
           case 'node': {
@@ -615,12 +805,28 @@
                 break;
               }
             }
+            if (!WebContainerRuntime) {
+              if (!args.length || args[0] === '-v' || args[0] === '--version') {
+                term.writeln('Node.js is unavailable in direct-file fallback mode.');
+                term.writeln('Use js <code> for browser JavaScript, or run through HTTP for WebContainer Node.js.');
+                break;
+              }
+              if (args[0] === '-e') {
+                await runBrowserJavaScript(args);
+                break;
+              }
+            }
             await runWebContainerCommand('node', args);
             break;
           }
 
           case 'npm':
           case 'npx':
+            if (!WebContainerRuntime) {
+              term.writeln(`${command} is unavailable in direct-file fallback mode.`);
+              term.writeln('Run the project through HTTP for WebContainer npm support: npm run dev -- --host 127.0.0.1');
+              break;
+            }
             await runWebContainerCommand(command, args);
             break;
 
@@ -695,6 +901,11 @@
         }
 
         const missingResources = [];
+        if (!V86LinuxBridgeRuntime) {
+          term.writeln('v86 Linux is unavailable in direct-file fallback mode.');
+          term.writeln('Run the project through HTTP for VM support: npm run dev -- --host 127.0.0.1');
+          return;
+        }
         for (const resource of profile.resources) {
           if (!(await resourceAvailable(resource))) {
             missingResources.push(resource);
@@ -721,7 +932,7 @@
         let linuxReadyHintShown = false;
         let alpineMirrorConfigured = false;
         let linuxOutputBuffer = '';
-        bridge = new V86LinuxBridge({
+        bridge = new V86LinuxBridgeRuntime({
           ...linuxConfigFor(profile, options),
           onStatusChange(status) {
             if (status === 'error') {

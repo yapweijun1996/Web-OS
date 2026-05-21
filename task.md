@@ -365,6 +365,26 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
 
 ---
 
+### 🎫 Issue Key: VORTEX-132
+* **Summary**: Add Terminal Direct File Fallback
+* **Issue Type**: Bug
+* **Priority**: High
+* **Status**: Done
+* **Epic**: Terminal Runtime
+* **Description**: Directly opening `terminal.html` with `file://` rendered a blank Terminal because browser file origin cannot resolve Vite bare imports such as `@xterm/xterm`, cannot load the cross-origin isolation service worker, and cannot boot WebContainer. The Terminal now falls back to a small built-in renderer and localStorage-backed shell instead of failing blank.
+* **Acceptance Criteria**:
+  - Direct `file://` Terminal renders a usable shell instead of a blank page.
+  - Direct-file mode prints that Node/npm/v86 require HTTP serving.
+  - `js <code>` works in direct-file mode through browser JavaScript.
+  - HTTP preview mode still uses the full xterm.js, Pyodide, WebContainer, and v86-capable runtime.
+  - `docs/terminal-runtime.md` documents the direct-file fallback and full-runtime requirement.
+* **Verification**:
+  - `npm run build` completed successfully.
+  - Chrome DevTools MCP verified `file:///.../terminal.html` exposes `window.vortexTerminal`, prints fallback status, runs `js console.log(22)`, and reports `npm` as unavailable without console errors.
+  - Chrome DevTools MCP verified HTTP preview Terminal still runs `py print(77)`, `js console.log(88)`, and `node -v` through Pyodide and WebContainer.
+
+---
+
 ## 🗂️ Epic: macOS Tahoe 26 Design Alignment
 
 Align the Vortex OS desktop with the latest macOS look and feel — **macOS Tahoe 26**

@@ -17,6 +17,24 @@ Cross-Origin-Opener-Policy: same-origin
 
 Those headers are configured in `vite.config.js` for both `server` and `preview`.
 
+## Direct File Fallback
+
+The full Terminal runtime is served through HTTP by Vite or the production build. Directly opening `terminal.html` with `file://` cannot resolve Vite bare imports such as `@xterm/xterm`, cannot activate the cross-origin isolation service worker, and cannot boot WebContainer or v86.
+
+To keep the Terminal from rendering a blank screen in that mode, `terminal.html` now falls back to a small built-in terminal renderer and localStorage-backed file records. In direct-file mode:
+
+- basic shell commands still load.
+- `js <code>` runs browser JavaScript, not Node.js.
+- `py <code>` can still boot Pyodide from the CDN when the browser allows it.
+- `npm`, `npx`, WebContainer Node.js, and v86 Linux print an explicit HTTP-serving requirement instead of failing silently.
+
+Use one of these commands for the full runtime:
+
+```bash
+npm run dev -- --host 127.0.0.1
+npm run preview -- --host 127.0.0.1
+```
+
 ## npm Global Installs
 
 WebContainer does not allow writes to `/usr/local/lib/node_modules`, so commands such as:
@@ -238,3 +256,5 @@ Verified on 2026-05-21:
 - Chrome DevTools MCP confirmed `curl --version` returns curl `8.19.0` with `https` protocol support and OpenSSL `3.5.6`.
 - Chrome DevTools MCP confirmed v86 fetch relay DHCP assigns `192.168.86.100` to `eth0`.
 - Chrome DevTools MCP confirmed the dynamic same-origin mirror rewrites `/etc/apk/repositories` to the active dev port, adds the local `<port>.external` host alias, and `apk update` returns `OK: 5869 distinct packages available`.
+- Chrome DevTools MCP confirmed direct `file://` Terminal mode no longer renders blank, has no console errors, runs `js console.log(22)` through browser JavaScript, and prints a clear HTTP-serving requirement for `npm`.
+- Chrome DevTools MCP confirmed HTTP preview Terminal still runs Pyodide Python and WebContainer Node.js after the fallback change.
