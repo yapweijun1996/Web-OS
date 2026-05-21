@@ -308,6 +308,26 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
 
 ---
 
+### 🎫 Issue Key: VORTEX-130
+* **Summary**: Add Browser App With Default Website Suggestions
+* **Issue Type**: Story
+* **Priority**: Medium
+* **Status**: Done
+* **Description**: Add a first-party Browser app to Vortex OS with an address/search bar, navigation controls, and default suggested websites including `https://yapweijun1996.com/` and `https://github.com/yapweijun1996`.
+* **Acceptance Criteria**:
+  - `browser.html` is emitted by the Vite multi-page build.
+  - The Browser app is available from the Dock and desktop context menu.
+  - Default suggestions include Yap Wei Jun, GitHub profile, GitHub, OpenAI, ChatGPT, MDN, npm, and Vercel.
+  - Address input accepts full URLs, bare domains, and search terms.
+* **Verification**:
+  - `npm run build` completed successfully and emitted `dist/browser.html`.
+  - `task.jsonl` parsed successfully as JSONL.
+  - Chrome DevTools MCP verified `browser.html` renders all default website suggestions and starts at `https://yapweijun1996.com/`.
+  - Chrome DevTools MCP verified the address bar normalizes `github.com/yapweijun1996` to `https://github.com/yapweijun1996` and search terms to a Google search URL.
+  - Chrome DevTools MCP verified the Dock Browser button opens a focused Browser window with `browser.html` and active Dock state.
+
+---
+
 ## 🗂️ Epic: macOS Tahoe 26 Design Alignment
 
 Align the Vortex OS desktop with the latest macOS look and feel — **macOS Tahoe 26**

@@ -75,6 +75,7 @@ window.vortexKernel = {
 const DOCK_APP_TARGETS = [
   { buttonId: 'dashboard-dock-btn', src: 'dashboard.html' },
   { buttonId: 'files-dock-btn', src: 'files.html' },
+  { buttonId: 'browser-dock-btn', src: 'browser.html' },
   { buttonId: 'terminal-dock-btn', src: 'terminal.html' }
 ];
 
@@ -135,6 +136,10 @@ function openDashboard() {
 
 function openFiles() {
   openOrFocusSystemWindow('Files', 'files.html');
+}
+
+function openBrowser() {
+  openOrFocusSystemWindow('Browser', 'browser.html');
 }
 
 function openTerminal() {
@@ -210,6 +215,7 @@ function renderInstalledApps() {
 const modal = document.getElementById('add-app-modal');
 const dashboardDockBtn = document.getElementById('dashboard-dock-btn');
 const filesDockBtn = document.getElementById('files-dock-btn');
+const browserDockBtn = document.getElementById('browser-dock-btn');
 const terminalDockBtn = document.getElementById('terminal-dock-btn');
 const addDockBtn = document.getElementById('add-app-dock-btn');
 const cancelModalBtn = document.getElementById('cancel-modal-btn');
@@ -223,6 +229,7 @@ function openAddAppModal() {
 
 dashboardDockBtn.addEventListener('click', openDashboard);
 filesDockBtn.addEventListener('click', openFiles);
+browserDockBtn.addEventListener('click', openBrowser);
 terminalDockBtn.addEventListener('click', openTerminal);
 addDockBtn.addEventListener('click', openAddAppModal);
 
@@ -485,6 +492,9 @@ desktopContextPanel.addEventListener('click', (e) => {
       break;
     case 'storage-tests':
       window.openWindow('Storage Tests', 'test.html');
+      break;
+    case 'browser':
+      openBrowser();
       break;
     case 'terminal':
       openTerminal();
