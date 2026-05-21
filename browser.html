@@ -103,12 +103,58 @@
       font-size: 11px;
       margin-top: 2px;
     }
+    .site-badge {
+      display: inline-flex;
+      width: fit-content;
+      margin-top: 5px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: rgba(10,132,255,.18);
+      color: #b9d8ff;
+      font-size: 10px;
+      font-weight: 650;
+    }
     .frame-wrap { position: relative; min-height: 0; background: #fff; }
     iframe {
       width: 100%;
       height: 100%;
       border: 0;
       background: #fff;
+    }
+    .external-panel {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 22px;
+      background: #151821;
+      color: #f5f7fb;
+    }
+    .external-panel[hidden] { display: none; }
+    .external-card {
+      width: min(440px, 100%);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 8px;
+      background: rgba(255,255,255,.06);
+      padding: 18px;
+      box-shadow: 0 18px 50px rgba(0,0,0,.24);
+    }
+    .external-card h1 {
+      margin: 0 0 8px;
+      font-size: 17px;
+      line-height: 1.25;
+    }
+    .external-card p {
+      margin: 0 0 14px;
+      color: #b8beca;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .external-card .target {
+      overflow-wrap: anywhere;
+      margin-bottom: 14px;
+      color: #d8e8ff;
+      font: 12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     }
     .status {
       position: absolute;
@@ -158,26 +204,43 @@
   <main class="workspace">
     <section class="suggestions" id="suggestions" aria-label="Suggested websites"></section>
     <div class="frame-wrap">
-      <iframe id="browser-frame" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts allow-same-origin"></iframe>
+      <iframe id="browser-frame" credentialless referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts allow-same-origin"></iframe>
+      <div class="external-panel" id="external-panel" hidden>
+        <div class="external-card">
+          <h1>Open in a real browser tab</h1>
+          <p>This website does not allow embedded browsers. Use a normal browser tab for the full site.</p>
+          <div class="target" id="external-target"></div>
+          <button type="button" class="primary" id="open-current-btn">Open Site</button>
+        </div>
+      </div>
       <div class="status" id="status"></div>
     </div>
   </main>
 
   <script type="module">
+    const EXTERNAL_ONLY_HOSTS = new Set([
+      'chatgpt.com',
+      'github.com',
+      'google.com',
+      'openai.com',
+      'vercel.com'
+    ]);
     const DEFAULT_SITES = [
       { title: 'Yap Wei Jun', url: 'https://yapweijun1996.com/', icon: 'YW' },
-      { title: 'GitHub Profile', url: 'https://github.com/yapweijun1996', icon: 'GH' },
-      { title: 'GitHub', url: 'https://github.com/', icon: 'GH' },
-      { title: 'OpenAI', url: 'https://openai.com/', icon: 'AI' },
-      { title: 'ChatGPT', url: 'https://chatgpt.com/', icon: 'CG' },
+      { title: 'GitHub Profile', url: 'https://github.com/yapweijun1996', icon: 'GH', externalOnly: true },
+      { title: 'GitHub', url: 'https://github.com/', icon: 'GH', externalOnly: true },
+      { title: 'OpenAI', url: 'https://openai.com/', icon: 'AI', externalOnly: true },
+      { title: 'ChatGPT', url: 'https://chatgpt.com/', icon: 'CG', externalOnly: true },
       { title: 'MDN Web Docs', url: 'https://developer.mozilla.org/', icon: 'MD' },
       { title: 'npm', url: 'https://www.npmjs.com/', icon: 'np' },
-      { title: 'Vercel', url: 'https://vercel.com/', icon: '▲' }
+      { title: 'Vercel', url: 'https://vercel.com/', icon: '▲', externalOnly: true }
     ];
 
     const form = document.getElementById('browser-form');
     const input = document.getElementById('address-input');
     const frame = document.getElementById('browser-frame');
+    const externalPanel = document.getElementById('external-panel');
+    const externalTarget = document.getElementById('external-target');
     const suggestions = document.getElementById('suggestions');
     const status = document.getElementById('status');
     const backBtn = document.getElementById('back-btn');
@@ -185,8 +248,10 @@
     const reloadBtn = document.getElementById('reload-btn');
     const homeBtn = document.getElementById('home-btn');
     const externalBtn = document.getElementById('external-btn');
+    const openCurrentBtn = document.getElementById('open-current-btn');
     const historyStack = [];
     let historyIndex = -1;
+    let currentUrl = DEFAULT_SITES[0].url;
     let statusTimer = null;
 
     function normalizeTarget(value) {
@@ -195,6 +260,15 @@
       if (/^https?:\/\//i.test(raw)) return raw;
       if (/^[a-z0-9.-]+\.[a-z]{2,}([/:?#].*)?$/i.test(raw)) return `https://${raw}`;
       return `https://www.google.com/search?q=${encodeURIComponent(raw)}`;
+    }
+
+    function externalOnly(url) {
+      try {
+        const host = new URL(url).hostname.replace(/^www\./, '');
+        return EXTERNAL_ONLY_HOSTS.has(host);
+      } catch {
+        return false;
+      }
     }
 
     function setStatus(message) {
@@ -209,9 +283,23 @@
       forwardBtn.disabled = historyIndex >= historyStack.length - 1;
     }
 
-    function navigate(url, { push = true } = {}) {
+    function openExternal(url) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+
+    function showExternalPanel(url, { open = false } = {}) {
+      currentUrl = url;
+      input.value = url;
+      externalTarget.textContent = url;
+      externalPanel.hidden = false;
+      frame.removeAttribute('src');
+      if (open) openExternal(url);
+      setStatus('Opened in a browser tab');
+    }
+
+    function navigate(url, { push = true, openBlocked = false } = {}) {
       const target = normalizeTarget(url);
-      frame.src = target;
+      currentUrl = target;
       input.value = target;
       if (push) {
         historyStack.splice(historyIndex + 1);
@@ -219,6 +307,12 @@
         historyIndex = historyStack.length - 1;
       }
       setNavState();
+      if (externalOnly(target)) {
+        showExternalPanel(target, { open: openBlocked });
+        return;
+      }
+      externalPanel.hidden = true;
+      frame.src = target;
       setStatus(`Loading ${new URL(target).hostname}`);
     }
 
@@ -229,7 +323,7 @@
         button.type = 'button';
         button.className = 'site';
         button.title = site.url;
-        button.addEventListener('click', () => navigate(site.url));
+        button.addEventListener('click', () => navigate(site.url, { openBlocked: true }));
 
         const icon = document.createElement('div');
         icon.className = 'site-icon';
@@ -243,6 +337,12 @@
         url.className = 'site-url';
         url.textContent = site.url.replace(/^https?:\/\//, '');
         copy.append(title, url);
+        if (site.externalOnly) {
+          const badge = document.createElement('div');
+          badge.className = 'site-badge';
+          badge.textContent = 'NEW TAB';
+          copy.appendChild(badge);
+        }
 
         button.append(icon, copy);
         suggestions.appendChild(button);
@@ -251,7 +351,7 @@
 
     form.addEventListener('submit', (event) => {
       event.preventDefault();
-      navigate(input.value);
+      navigate(input.value, { openBlocked: true });
     });
 
     backBtn.addEventListener('click', () => {
@@ -267,6 +367,10 @@
     });
 
     reloadBtn.addEventListener('click', () => {
+      if (externalPanel.hidden === false) {
+        openExternal(currentUrl);
+        return;
+      }
       try {
         frame.contentWindow.location.reload();
       } catch {
@@ -277,8 +381,9 @@
 
     homeBtn.addEventListener('click', () => navigate(DEFAULT_SITES[0].url));
     externalBtn.addEventListener('click', () => {
-      window.open(normalizeTarget(input.value), '_blank', 'noopener,noreferrer');
+      openExternal(normalizeTarget(input.value));
     });
+    openCurrentBtn.addEventListener('click', () => openExternal(currentUrl));
 
     frame.addEventListener('load', () => {
       setStatus('Page loaded');
