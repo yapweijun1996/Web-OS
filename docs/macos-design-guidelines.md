@@ -194,10 +194,10 @@ in the **macOS Tahoe 26 Design Alignment** epic in `task.md`.
 | Area | Current state | Target | Ticket |
 |---|---|---|---|
 | Material | Flat frosted blur, no specular highlight/saturation | Liquid Glass material system (§2) | VORTEX-117 |
-| Menu bar | Semi-opaque slab (`rgba(22,22,24,.55)`) | Fully transparent (§4) | VORTEX-118 |
-| Corner radii | Ad-hoc per element | Concentric radius tokens (§3) | VORTEX-119 |
-| Controls | `.btn` 7px rectangles | Capsule controls (§7) | VORTEX-120 |
-| Window toolbar | Distinct `--titlebar` color | Unified with window body (§6) | VORTEX-121 |
-| Control Center | Menu-bar glyph only, no panel | Real glass Control Center (§8) | VORTEX-122 |
-| App icons | Emoji glyphs | Squircle layered icons (§5/§9) | VORTEX-123 |
-| Accessibility | No reduced-transparency / contrast handling | Full media-query support (§12) | VORTEX-124 |
+| Menu bar | ~~Semi-opaque slab~~ → transparent + text-shadow | Fully transparent (§4) | VORTEX-118 ✅ |
+| Corner radii | ~~Ad-hoc per element~~ → 5 `--r-*` tokens applied | Concentric radius tokens (§3) | VORTEX-119 ✅ |
+| Controls | ~~`.btn` 7px rectangles~~ → capsule `var(--r-capsule)` + focus ring | Capsule controls (§7) | VORTEX-120 ✅ |
+| Window toolbar | ~~Distinct `--titlebar` color~~ → unified `--window-bg` | Unified with window body (§6) | VORTEX-121 ✅ |
+| Control Center | ~~Menu-bar glyph only~~ → 3-tile Liquid Glass panel (Wallpaper/Accent/Theme) | Real glass Control Center (§8) | VORTEX-122 ✅ |
+| App icons | ~~Emoji glyphs~~ → squircle gradient tiles | Squircle layered icons (§5/§9) | VORTEX-123 ✅ |
+| Accessibility | ~~No media-query support~~ → 3 media queries (transparency/motion/contrast) + user accent | Full media-query support (§12) | VORTEX-124 ✅ |

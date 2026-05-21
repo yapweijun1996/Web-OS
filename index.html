@@ -13,10 +13,8 @@
     :root {
       --accent: #0a84ff;
       --window-bg: #2a2a2c;
-      --titlebar: rgba(56, 56, 58, 0.92);
       --text: #f2f2f7;
       --text-dim: #98989f;
-      --menubar: rgba(22, 22, 24, 0.55);
       --dock: rgba(120, 120, 128, 0.28);
 
       /* VORTEX-117: Liquid Glass material tokens (macOS Tahoe 26).
@@ -26,6 +24,14 @@
       --lg-edge: rgba(255, 255, 255, 0.12);
       --lg-specular: inset 0 1px 0 rgba(255, 255, 255, 0.15);
       --lg-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+
+      /* VORTEX-119: Concentric corner-radius tokens (macOS Tahoe 26).
+         See docs/macos-design-guidelines.md section 3. */
+      --r-window:  12px;
+      --r-panel:   11px;
+      --r-dock:    22px;
+      --r-control:  8px;
+      --r-capsule: 999px;
     }
 
     * { box-sizing: border-box; }
@@ -67,9 +73,7 @@
       align-items: center;
       justify-content: space-between;
       padding: 0 10px;
-      background: var(--menubar);
-      backdrop-filter: blur(20px) saturate(180%);
-      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      background: transparent;
       font-size: 13px;
     }
 
@@ -82,6 +86,7 @@
       display: flex;
       align-items: center;
       line-height: 1;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65);
     }
 
     .menu-item:hover { background: rgba(255, 255, 255, 0.18); }
@@ -108,7 +113,7 @@
       backdrop-filter: var(--lg-blur);
       -webkit-backdrop-filter: var(--lg-blur);
       border: 0.5px solid var(--lg-edge);
-      border-radius: 6px;
+      border-radius: var(--r-panel);
       box-shadow: var(--lg-shadow), var(--lg-specular);
       z-index: 10001;
     }
@@ -147,7 +152,7 @@
       backdrop-filter: var(--lg-blur);
       -webkit-backdrop-filter: var(--lg-blur);
       border: 0.5px solid var(--lg-edge);
-      border-radius: 7px;
+      border-radius: var(--r-panel);
       box-shadow: var(--lg-shadow), var(--lg-specular);
       z-index: 10002;
     }
@@ -216,7 +221,7 @@
       color: inherit;
       font: inherit;
       cursor: pointer;
-      border-radius: 8px;
+      border-radius: var(--r-control);
       transition: background 0.15s, transform 0.1s;
       user-select: none;
       direction: ltr;
@@ -234,6 +239,38 @@
       font-size: 38px;
       margin-bottom: 6px;
     }
+
+    /* VORTEX-123: Squircle layered icon tiles (macOS Tahoe 26) */
+    .squircle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      font-size: 24px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+      flex-shrink: 0;
+    }
+
+    .desktop-icon .squircle {
+      width: 54px;
+      height: 54px;
+      border-radius: 14px;
+      font-size: 28px;
+      margin-bottom: 6px;
+    }
+
+    .icon-dashboard { background: linear-gradient(145deg, #5e5ce6, #3634a3); }
+    .icon-files     { background: linear-gradient(145deg, #f5a623, #d4860a); }
+    .icon-browser   { background: linear-gradient(145deg, #3d9ef8, #1a6fd8); }
+    .icon-terminal  { background: linear-gradient(145deg, #3a3a3e, #1c1c1e); }
+    .icon-storage   { background: linear-gradient(145deg, #30d158, #1a9e3f); }
+    .icon-security  { background: linear-gradient(145deg, #ff453a, #c0392b); }
+    .icon-notes     { background: linear-gradient(145deg, #ffd60a, #cc9c00); }
+    .icon-monitor   { background: linear-gradient(145deg, #ff9f0a, #b86e00); }
+    .icon-plugin    { background: linear-gradient(145deg, #bf5af2, #8944c0); }
+    .icon-add       { background: linear-gradient(145deg, #636366, #3a3a3c); }
 
     .icon-label {
       font-size: 12px;
@@ -263,7 +300,7 @@
       backdrop-filter: var(--lg-blur);
       -webkit-backdrop-filter: var(--lg-blur);
       border: 0.5px solid var(--lg-edge);
-      border-radius: 20px;
+      border-radius: var(--r-dock);
       box-shadow: var(--lg-shadow), var(--lg-specular);
       pointer-events: auto;
     }
@@ -325,7 +362,7 @@
       height: 400px;
       background: var(--window-bg);
       border: 1px solid rgba(0, 0, 0, 0.4);
-      border-radius: 11px;
+      border-radius: var(--r-window);
       box-shadow: 0 22px 60px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
       display: flex;
       flex-direction: column;
@@ -340,8 +377,7 @@
       display: flex;
       align-items: center;
       padding: 0 12px;
-      background: var(--titlebar);
-      border-bottom: 1px solid rgba(0, 0, 0, 0.35);
+      background: var(--window-bg);
       cursor: move;
       user-select: none;
     }
@@ -436,7 +472,7 @@
       backdrop-filter: var(--lg-blur);
       -webkit-backdrop-filter: var(--lg-blur);
       border: 0.5px solid var(--lg-edge);
-      border-radius: 12px;
+      border-radius: var(--r-panel);
       padding: 22px;
       box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), var(--lg-specular);
       z-index: 10000;
@@ -453,7 +489,7 @@
       padding: 8px 10px;
       background: rgba(0, 0, 0, 0.35);
       border: 1px solid rgba(255, 255, 255, 0.14);
-      border-radius: 7px;
+      border-radius: var(--r-control);
       color: var(--text);
       font-size: 13px;
       margin-bottom: 18px;
@@ -493,7 +529,7 @@
       color: #f9c74f;
       background: rgba(249, 199, 79, 0.1);
       border: 1px solid rgba(249, 199, 79, 0.25);
-      border-radius: 6px;
+      border-radius: var(--r-control);
       padding: 8px 10px;
       margin: -8px 0 16px;
       line-height: 1.5;
@@ -508,7 +544,7 @@
 
     .wallpaper-swatch {
       height: 46px;
-      border-radius: 8px;
+      border-radius: var(--r-control);
       border: 2px solid transparent;
       padding: 0;
       cursor: pointer;
@@ -529,11 +565,16 @@
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
     .btn {
-      padding: 6px 14px;
+      padding: 7px 14px;
       border: none;
-      border-radius: 7px;
+      border-radius: var(--r-capsule);
       font-size: 13px;
       cursor: pointer;
+    }
+
+    .btn:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.35);
     }
 
     .btn-secondary { background: rgba(255, 255, 255, 0.14); color: var(--text); }
@@ -542,13 +583,128 @@
     .vx-toast {
       position: fixed; bottom: 24px; right: 24px;
       background: #3a3a3c; color: #f2f2f7;
-      padding: 12px 18px; border-radius: 10px;
+      padding: 12px 18px; border-radius: var(--r-panel);
       font: 13px/1.4 -apple-system, sans-serif;
       box-shadow: 0 4px 20px rgba(0,0,0,.6);
       z-index: 99999; max-width: 320px;
       animation: vx-in .18s ease;
     }
     @keyframes vx-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+    /* VORTEX-122: Control Center panel */
+    #control-center {
+      position: fixed;
+      top: 34px;
+      right: 8px;
+      width: 256px;
+      padding: 12px;
+      background: var(--lg-tint);
+      backdrop-filter: var(--lg-blur);
+      -webkit-backdrop-filter: var(--lg-blur);
+      border: 0.5px solid var(--lg-edge);
+      border-radius: var(--r-panel);
+      box-shadow: var(--lg-shadow), var(--lg-specular);
+      z-index: 10001;
+    }
+
+    #control-center[hidden] { display: none; }
+
+    .cc-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .cc-tile {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: space-between;
+      min-height: 66px;
+      padding: 10px 12px;
+      border: 0.5px solid var(--lg-edge);
+      border-radius: var(--r-control);
+      background: rgba(255, 255, 255, 0.09);
+      color: var(--text);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.15s;
+    }
+
+    .cc-tile:hover { background: rgba(255, 255, 255, 0.18); }
+    .cc-tile:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.35);
+    }
+    .cc-tile-icon { font-size: 18px; margin-bottom: 2px; }
+    .cc-tile-label { font-size: 11px; color: var(--text-dim); font-weight: 400; margin-top: 2px; }
+    .cc-accent-dot {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    /* VORTEX-122: Light mode visual effect */
+    body.light-mode {
+      background:
+        radial-gradient(ellipse 80% 60% at 25% 0%, rgba(190, 170, 240, 0.25), transparent 60%),
+        radial-gradient(ellipse 90% 70% at 85% 100%, rgba(140, 190, 240, 0.2), transparent 60%),
+        linear-gradient(165deg, #e2e6f5 0%, #edf0fa 50%, #f4f5fb 100%);
+      --text: #1c1c1e;
+      --text-dim: #636366;
+      --window-bg: #ebebed;
+      --lg-tint: rgba(245, 245, 247, 0.68);
+      --lg-edge: rgba(0, 0, 0, 0.10);
+      --dock: rgba(200, 200, 208, 0.55);
+    }
+
+    body.light-mode #menubar { color: #1c1c1e; }
+
+    /* VORTEX-124: prefers-reduced-transparency */
+    @media (prefers-reduced-transparency: reduce) {
+      .lg-surface,
+      .menu-dropdown,
+      .context-panel,
+      #dock,
+      #add-app-modal,
+      #settings-modal,
+      #control-center {
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        background: #2c2c2e;
+      }
+      #menubar { background: rgba(18, 18, 20, 0.97); }
+    }
+
+    /* VORTEX-124: prefers-reduced-motion */
+    @media (prefers-reduced-motion: reduce) {
+      .dock-app { transition: none; }
+      .dock-app:hover { transform: none; }
+      .dock-app:active { transform: none; }
+      .desktop-icon { transition: none; }
+      .desktop-icon:active { transform: none; }
+      .wallpaper-swatch { transition: none; }
+      .wallpaper-swatch:hover { transform: none; }
+      .cc-tile { transition: none; }
+      .vx-toast { animation: none; }
+    }
+
+    /* VORTEX-124: prefers-contrast: more */
+    @media (prefers-contrast: more) {
+      .window { border: 1px solid rgba(255, 255, 255, 0.35); }
+      .menu-dropdown,
+      .context-panel,
+      #dock,
+      #control-center { border: 1px solid rgba(255, 255, 255, 0.45); }
+      .window-title { color: #fff; }
+      .menu-item { text-shadow: none; color: #fff; }
+      #menubar { background: rgba(0, 0, 0, 0.75); }
+    }
   </style>
 </head>
 <body>
@@ -567,7 +723,7 @@
       <span class="menu-item" data-menu="Help">Help</span>
     </div>
     <div class="menu-section">
-      <span class="menu-item menu-status" title="Control Center">
+      <span class="menu-item menu-status" id="cc-menu-btn" title="Control Center" role="button" aria-expanded="false" tabindex="0">
         <svg width="15" height="15" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="3" width="11" height="3.4" rx="1.7"/><rect x="2.5" y="9.6" width="11" height="3.4" rx="1.7"/></g><circle cx="5.4" cy="4.7" r="1.5" fill="currentColor"/><circle cx="10.6" cy="11.3" r="1.5" fill="currentColor"/></svg>
       </span>
       <span class="menu-item menu-status" title="Wi-Fi">
@@ -580,18 +736,43 @@
 
   <!-- Desktop Icons -->
   <div id="desktop">
+    <button type="button" class="desktop-icon" id="monitor-desktop-btn" aria-label="Open Activity Monitor">
+      <span class="icon-img squircle icon-monitor">📊</span>
+      <span class="icon-label">Activity Monitor</span>
+    </button>
     <button type="button" class="desktop-icon" data-open-src="test.html" aria-label="Open Storage Tests">
-      <span class="icon-img">🧪</span>
+      <span class="icon-img squircle icon-storage">🧪</span>
       <span class="icon-label">Storage Tests</span>
     </button>
     <button type="button" class="desktop-icon" data-open-src="security-test.html" aria-label="Open Security Tests">
-      <span class="icon-img">🔒</span>
+      <span class="icon-img squircle icon-security">🔒</span>
       <span class="icon-label">Security Tests</span>
     </button>
     <button type="button" class="desktop-icon" data-open-src="notes.html" aria-label="Open Vortex Notes">
-      <span class="icon-img">✍️</span>
+      <span class="icon-img squircle icon-notes">✍️</span>
       <span class="icon-label">Vortex Notes</span>
     </button>
+  </div>
+
+  <!-- Control Center Panel (VORTEX-122) -->
+  <div id="control-center" hidden role="dialog" aria-label="Control Center">
+    <div class="cc-grid">
+      <button type="button" class="cc-tile" id="cc-wallpaper-btn" aria-label="Open wallpaper settings">
+        <span class="cc-tile-icon">🖼</span>
+        <span>Wallpaper</span>
+        <span class="cc-tile-label">Settings</span>
+      </button>
+      <button type="button" class="cc-tile" id="cc-accent-btn" aria-label="Cycle accent color">
+        <span class="cc-tile-icon"><span class="cc-accent-dot" id="cc-accent-dot"></span></span>
+        <span>Accent</span>
+        <span class="cc-tile-label" id="cc-accent-label">Blue</span>
+      </button>
+      <button type="button" class="cc-tile" id="cc-theme-btn" aria-label="Toggle light/dark mode">
+        <span class="cc-tile-icon" id="cc-theme-icon">🌙</span>
+        <span>Appearance</span>
+        <span class="cc-tile-label" id="cc-theme-label">Dark</span>
+      </button>
+    </div>
   </div>
 
   <div id="desktop-context-panel" class="context-panel" role="menu" hidden>
@@ -647,12 +828,12 @@
   <!-- Dock -->
   <div id="dock-container">
     <div id="dock">
-      <button type="button" class="dock-app" id="dashboard-dock-btn" title="Dashboard" aria-label="Open Dashboard">🌌</button>
-      <button type="button" class="dock-app" id="files-dock-btn" title="Files" aria-label="Open Files">📂</button>
-      <button type="button" class="dock-app" id="browser-dock-btn" title="Browser" aria-label="Open Browser">🌐</button>
-      <button type="button" class="dock-app" id="terminal-dock-btn" title="Terminal" aria-label="Open Terminal">💻</button>
+      <button type="button" class="dock-app" id="dashboard-dock-btn" title="Dashboard" aria-label="Open Dashboard"><span class="squircle icon-dashboard">🌌</span></button>
+      <button type="button" class="dock-app" id="files-dock-btn" title="Files" aria-label="Open Files"><span class="squircle icon-files">📂</span></button>
+      <button type="button" class="dock-app" id="browser-dock-btn" title="Browser" aria-label="Open Browser"><span class="squircle icon-browser">🌐</span></button>
+      <button type="button" class="dock-app" id="terminal-dock-btn" title="Terminal" aria-label="Open Terminal"><span class="squircle icon-terminal">💻</span></button>
       <div class="dock-divider"></div>
-      <button type="button" class="dock-app" id="add-app-dock-btn" title="Add Sandboxed App" aria-label="Add Sandboxed App">➕</button>
+      <button type="button" class="dock-app" id="add-app-dock-btn" title="Add Sandboxed App" aria-label="Add Sandboxed App"><span class="squircle icon-add">➕</span></button>
     </div>
   </div>
 

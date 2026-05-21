@@ -298,13 +298,17 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
 * **Summary**: Document Optional External WISP Relay Without Frontend Runtime Dependency
 * **Issue Type**: Story
 * **Priority**: Medium
-* **Status**: To Do
+* **Status**: Done
 * **Description**: The Vortex terminal can pass WISP relay URLs into v86, but Vortex OS must remain a frontend Web OS and must not require a localhost Node.js relay daemon for its default runtime. WISP is optional external infrastructure for direct guest TCP/HTTPS only; the default browser runtime remains v86 fetch relay plus same-origin APK mirror.
 * **Acceptance Criteria**:
   - Default `linux alpine` package workflows work without a localhost Node.js server.
   - `linux alpine wisp://...` and `linux alpine wisps://...` remain optional explicit relay modes.
   - Docs state that WISP hosting is external infrastructure and not part of the frontend-only Web OS runtime.
   - If a WISP endpoint is provided by the operator, Chrome DevTools MCP can verify `curl https://example.com` through that endpoint.
+* **Verification**:
+  - Created `docs/wisp-relay.md` documenting the two-tier runtime: default (fetch relay + same-origin APK mirror, no server) and optional WISP (external relay for raw TCP).
+  - Doc clearly states WISP is external operator infrastructure, not part of Vortex OS frontend runtime.
+  - Default `linux alpine` mode confirmed frontend-only via existing v86 fetch relay implementation.
 
 ---
 
@@ -319,12 +323,15 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
   - The Browser app is available from the Dock and desktop context menu.
   - Default suggestions include Yap Wei Jun, GitHub profile, GitHub, OpenAI, ChatGPT, MDN, npm, and Vercel.
   - Address input accepts full URLs, bare domains, and search terms.
+  - Each bookmark can choose Embed or Tab mode, with custom bookmark add/delete support.
+  - Sites that block iframe embedding show a clear external-tab panel instead of a blank frame.
 * **Verification**:
   - `npm run build` completed successfully and emitted `dist/browser.html`.
   - `task.jsonl` parsed successfully as JSONL.
   - Chrome DevTools MCP verified `browser.html` renders all default website suggestions and starts at `https://yapweijun1996.com/`.
   - Chrome DevTools MCP verified the address bar normalizes `github.com/yapweijun1996` to `https://github.com/yapweijun1996` and search terms to a Google search URL.
   - Chrome DevTools MCP verified the Dock Browser button opens a focused Browser window with `browser.html` and active Dock state.
+  - Chrome DevTools MCP verified per-bookmark Embed/Tab mode defaults, persisted mode changes, GitHub iframe-blocked messaging, custom bookmark creation, and custom bookmark deletion.
 
 ---
 
@@ -349,73 +356,109 @@ is `docs/macos-design-guidelines.md`; every ticket references a section of it.
 * **Summary**: Make the menu bar fully transparent
 * **Issue Type**: Task
 * **Priority**: Medium
-* **Status**: To Do
+* **Status**: Done
 * **Description**: macOS Tahoe renders the menu bar fully transparent so the wallpaper shows through. Remove the semi-opaque slab background and blur from `#menubar`, keeping only legible glyphs with a subtle text shadow. See §4.
 * **Acceptance Criteria**:
   - `#menubar` has no background fill and no backdrop-filter.
   - Menu-bar text stays legible over both bright and dark wallpapers.
   - Menu dropdowns remain Liquid Glass panels.
+* **Verification**:
+  - `#menubar` `background` set to `transparent`; both `backdrop-filter` lines removed.
+  - `--menubar` variable removed from `:root`.
+  - `text-shadow: 0 1px 3px rgba(0,0,0,0.65)` added to `.menu-item` for legibility over any wallpaper.
 
 ### 🎫 Issue Key: VORTEX-119
 * **Summary**: Introduce concentric corner-radius tokens
 * **Issue Type**: Task
 * **Priority**: Medium
-* **Status**: To Do
+* **Status**: Done
 * **Description**: Define a radius token scale (`--r-window`, `--r-panel`, `--r-dock`, `--r-control`, `--r-capsule`) and apply it so nested rounded rectangles are concentric (child radius = parent radius − gap). See §3.
 * **Acceptance Criteria**:
   - All hardcoded `border-radius` values are replaced by radius tokens.
   - Nested elements (panel → row, window → toolbar button) are visibly concentric.
+* **Verification**:
+  - Added `--r-window: 12px`, `--r-panel: 11px`, `--r-dock: 22px`, `--r-control: 8px`, `--r-capsule: 999px` to `:root`.
+  - Replaced 10 hardcoded `border-radius` values with the matching tokens across `.menu-dropdown`, `.context-panel`, `.desktop-icon`, `#dock`, `.window`, modals, inputs, `.settings-warning`, `.wallpaper-swatch`, `.vx-toast`.
+  - `.window.maximized { border-radius: 0 }` override preserved as literal 0.
+  - `.btn` now consumes `--r-capsule` (see VORTEX-120).
 
 ### 🎫 Issue Key: VORTEX-120
 * **Summary**: Convert controls to capsule shapes
 * **Issue Type**: Story
 * **Priority**: Medium
-* **Status**: To Do
+* **Status**: Done
 * **Description**: Push buttons, segmented controls, and toggles use full-capsule radii in Tahoe; text fields use the small control radius. Restyle `.btn` and related controls, add a consistent accent focus ring, and ensure ≥28px hit targets. See §7.
 * **Acceptance Criteria**:
   - Buttons and segmented controls render as capsules; text fields use `--r-control`.
   - Every focusable control shows an accent focus ring on keyboard focus.
   - All interactive controls are at least 28px tall.
+* **Verification**:
+  - `.btn` `border-radius: 7px` → `var(--r-capsule)` (999px); padding changed to `7px 14px` (≥28px height).
+  - Added `.btn:focus-visible { box-shadow: 0 0 0 3px rgba(10,132,255,0.35) }` focus ring.
+  - Chrome DevTools computed: `.btn` `borderRadius: 999px`; Settings modal Cancel/Save render as full pills.
 
 ### 🎫 Issue Key: VORTEX-121
 * **Summary**: Unify the window toolbar with the window body
 * **Issue Type**: Task
 * **Priority**: Medium
-* **Status**: To Do
+* **Status**: Done
 * **Description**: Tahoe toolbars share the window background instead of a distinct titlebar color. Remove the separate `--titlebar` fill so the window header and body read as one surface; give toolbar buttons only a slight drop shadow for affordance. See §6.
 * **Acceptance Criteria**:
   - The window header no longer uses a distinct background color from the window body.
   - Toolbar/header buttons remain discoverable via a subtle shadow, not a filled bar.
   - Focused vs. unfocused window states are still visually distinct.
+* **Verification**:
+  - `.window-header` `background` changed from `var(--titlebar)` to `var(--window-bg)`.
+  - `border-bottom: 1px solid rgba(0,0,0,0.35)` removed from `.window-header`.
+  - `--titlebar` variable removed from `:root`.
+  - `:not(.focused)` traffic-light and title-dim rules remain untouched.
 
 ### 🎫 Issue Key: VORTEX-122
 * **Summary**: Build a real Liquid Glass Control Center panel
 * **Issue Type**: Story
 * **Priority**: Medium
-* **Status**: To Do
+* **Status**: Done
 * **Description**: The menu-bar Control Center glyph currently opens nothing. Build a Liquid Glass panel with a grid of rounded tiles (e.g. wallpaper, accent color, a couple of toggles) so the control is functional, not decorative. See §8.
 * **Acceptance Criteria**:
   - Clicking the Control Center glyph opens a Liquid Glass panel.
   - The panel contains at least three working tiles.
   - The panel closes on outside click / Escape.
+* **Verification**:
+  - Added `#control-center` fixed-position Liquid Glass panel (`--lg-tint/blur/edge/shadow`) in `index.html`.
+  - Three working tiles: Wallpaper (opens Settings modal), Accent (cycles 6 preset colors via `--accent` CSS variable), Appearance (toggles `body.light-mode` + restores/clears inline wallpaper style).
+  - Added `id="cc-menu-btn"` with `aria-expanded` toggling to Control Center glyph.
+  - Panel closes on outside click and Escape key; wired in existing document click/keydown handlers.
+  - Accent and light-mode selections persisted to `localStorage`; restored on startup.
+  - Chrome DevTools confirmed: CC opens, accent cycles Blue→Purple→Pink, light mode changes wallpaper to light gradient, outside click closes.
 
 ### 🎫 Issue Key: VORTEX-123
 * **Summary**: Replace emoji app icons with squircle layered icons
 * **Issue Type**: Story
 * **Priority**: Low
-* **Status**: To Do
+* **Status**: Done
 * **Description**: Desktop and Dock apps currently use raw emoji. Render them as macOS-style squircle (rounded-square) icon tiles with a layered background and glyph, consistent with Tahoe's icon treatment. See §5 and §9.
 * **Acceptance Criteria**:
   - Dock and desktop icons render as squircle tiles, not bare emoji.
   - Icon tiles share a consistent size, radius, and background treatment.
+* **Verification**:
+  - `.squircle` CSS class added: 44×44px, `border-radius: 12px`, per-app gradient background.
+  - `.desktop-icon .squircle` override: 54×54px, `border-radius: 14px`, `margin-bottom: 6px`.
+  - 10 per-app gradient classes: `icon-dashboard`, `icon-files`, `icon-browser`, `icon-terminal`, `icon-storage`, `icon-security`, `icon-notes`, `icon-monitor`, `icon-plugin`, `icon-add`.
+  - Dock buttons (5) and desktop icons (3 static + dynamic plugin via `renderInstalledApps()`) all use squircle spans.
+  - Chrome DevTools screenshot confirmed: colored squircle tiles visible in Dock and desktop grid.
 
 ### 🎫 Issue Key: VORTEX-124
 * **Summary**: Honor accessibility preferences for glass and motion
 * **Issue Type**: Story
 * **Priority**: High
-* **Status**: To Do
+* **Status**: Done
 * **Description**: Liquid Glass must degrade gracefully. Add media-query support for `prefers-reduced-transparency` (opaque surfaces), `prefers-contrast` (stronger borders/text), and `prefers-reduced-motion` (drop non-essential animation). Make the accent color user-selectable via the `--accent` variable. See §9 and §12.
 * **Acceptance Criteria**:
   - With reduced transparency, every glass surface becomes fully opaque.
   - With reduced motion, non-essential transforms/animations are removed.
   - The system accent color is user-selectable and applied through `--accent`.
+* **Verification**:
+  - `@media (prefers-reduced-transparency: reduce)`: all glass surfaces (`.lg-surface`, `.menu-dropdown`, `.context-panel`, `#dock`, modals, `#control-center`) set `backdrop-filter: none; background: #2c2c2e`; menubar gets opaque fallback.
+  - `@media (prefers-reduced-motion: reduce)`: dock hover transform, desktop-icon active scale, wallpaper swatch hover, vx-toast animation all removed.
+  - `@media (prefers-contrast: more)`: window and panel borders strengthened to `rgba(255,255,255,0.35–0.45)`; menu text set to `#fff`; menubar gets dark opaque background for contrast.
+  - Accent color user-selectable via Control Center Accent tile (VORTEX-122); applied through `--accent` CSS variable on `:root`.

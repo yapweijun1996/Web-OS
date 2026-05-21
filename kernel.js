@@ -199,7 +199,7 @@ function renderInstalledApps() {
     icon.onclick = () => window.launchPlugin(app.manifest, app.manifestUrl);
 
     const iconImg = document.createElement('span');
-    iconImg.className = 'icon-img';
+    iconImg.className = 'icon-img squircle icon-plugin';
     iconImg.textContent = '🧩';
 
     const iconLabel = document.createElement('span');
@@ -232,6 +232,7 @@ filesDockBtn.addEventListener('click', openFiles);
 browserDockBtn.addEventListener('click', openBrowser);
 terminalDockBtn.addEventListener('click', openTerminal);
 addDockBtn.addEventListener('click', openAddAppModal);
+document.getElementById('monitor-desktop-btn').addEventListener('click', openMonitor);
 
 cancelModalBtn.addEventListener('click', () => {
   modal.style.display = 'none';
@@ -357,6 +358,38 @@ function renderWallpaperGrid() {
 
 // Apply the saved wallpaper on startup.
 applyWallpaper(currentWallpaper());
+
+// VORTEX-122: apply saved accent color on startup.
+const ACCENT_COLORS = [
+  { name: 'Blue',   value: '#0a84ff' },
+  { name: 'Purple', value: '#bf5af2' },
+  { name: 'Pink',   value: '#ff375f' },
+  { name: 'Orange', value: '#ff9f0a' },
+  { name: 'Green',  value: '#30d158' },
+  { name: 'Teal',   value: '#5ac8fa' },
+];
+
+function getCurrentAccentIndex() {
+  const saved = localStorage.getItem('vortex_accent');
+  const idx = ACCENT_COLORS.findIndex(c => c.value === saved);
+  return idx >= 0 ? idx : 0;
+}
+
+function applyAccent(index) {
+  const color = ACCENT_COLORS[index];
+  document.documentElement.style.setProperty('--accent', color.value);
+  localStorage.setItem('vortex_accent', color.value);
+  const label = document.getElementById('cc-accent-label');
+  if (label) label.textContent = color.name;
+}
+
+applyAccent(getCurrentAccentIndex());
+
+// Apply saved light mode on startup.
+if (localStorage.getItem('vortex_light_mode') === '1') {
+  document.body.classList.add('light-mode');
+  document.body.style.background = '';
+}
 
 function openSettings() {
   corsProxyInput.value = localStorage.getItem('vortex_cors_proxy_url') || '';
@@ -667,9 +700,76 @@ document.getElementById('desktop').addEventListener('click', (e) => {
   window.openWindow(label, src);
 });
 
+// VORTEX-122: Control Center panel
+const controlCenter = document.getElementById('control-center');
+const ccMenuBtn = document.getElementById('cc-menu-btn');
+
+function updateThemeTile() {
+  const isLight = document.body.classList.contains('light-mode');
+  const icon = document.getElementById('cc-theme-icon');
+  const label = document.getElementById('cc-theme-label');
+  if (icon) icon.textContent = isLight ? '☀️' : '🌙';
+  if (label) label.textContent = isLight ? 'Light' : 'Dark';
+}
+
+function openControlCenter() {
+  closeMenu();
+  closeDesktopContextPanel();
+  applyAccent(getCurrentAccentIndex());
+  updateThemeTile();
+  controlCenter.hidden = false;
+  ccMenuBtn.setAttribute('aria-expanded', 'true');
+  controlCenter.querySelector('.cc-tile')?.focus({ preventScroll: true });
+}
+
+function closeControlCenter() {
+  if (controlCenter.hidden) return;
+  controlCenter.hidden = true;
+  ccMenuBtn.setAttribute('aria-expanded', 'false');
+}
+
+ccMenuBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!controlCenter.hidden) closeControlCenter();
+  else openControlCenter();
+});
+
+ccMenuBtn.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    if (!controlCenter.hidden) closeControlCenter();
+    else openControlCenter();
+  }
+});
+
+document.getElementById('cc-wallpaper-btn').addEventListener('click', () => {
+  closeControlCenter();
+  openSettings();
+});
+
+document.getElementById('cc-accent-btn').addEventListener('click', () => {
+  const next = (getCurrentAccentIndex() + 1) % ACCENT_COLORS.length;
+  applyAccent(next);
+});
+
+document.getElementById('cc-theme-btn').addEventListener('click', () => {
+  document.body.classList.toggle('light-mode');
+  const isLight = document.body.classList.contains('light-mode');
+  localStorage.setItem('vortex_light_mode', isLight ? '1' : '');
+  // Inline style from applyWallpaper() overrides CSS class rules; clear it so
+  // body.light-mode background takes effect, restore saved wallpaper on dark.
+  if (isLight) {
+    document.body.style.background = '';
+  } else {
+    applyWallpaper(currentWallpaper());
+  }
+  updateThemeTile();
+});
+
 document.addEventListener('click', (e) => {
   closeMenu();
   if (!desktopContextPanel.contains(e.target)) closeDesktopContextPanel();
+  if (!controlCenter.contains(e.target) && !ccMenuBtn.contains(e.target)) closeControlCenter();
 });
 document.addEventListener('keydown', (e) => {
   if (handleDesktopContextPanelKeydown(e)) return;
@@ -677,6 +777,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeMenu();
     closeDesktopContextPanel();
+    closeControlCenter();
     return;
   }
   // Window shortcuts use Ctrl+Alt: the macOS Cmd equivalents (Cmd+W/M/R)

@@ -39,7 +39,7 @@
       cursor: pointer;
     }
     button:hover { background: rgba(255,255,255,.16); }
-    button:focus-visible, input:focus-visible {
+    button:focus-visible, input:focus-visible, .site:focus-visible {
       outline: 2px solid #0a84ff;
       outline-offset: 1px;
     }
@@ -65,6 +65,19 @@
       background: rgba(0,0,0,.16);
       border-bottom: 1px solid rgba(255,255,255,.08);
     }
+    .bookmark-editor {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: minmax(110px, .8fr) minmax(170px, 1.4fr) minmax(56px, .3fr) auto;
+      gap: 7px;
+      align-items: center;
+      padding: 8px;
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 8px;
+      background: rgba(0,0,0,.18);
+    }
+    .bookmark-editor input { height: 30px; }
+    .bookmark-editor button { height: 30px; }
     .site {
       display: grid;
       grid-template-columns: 32px minmax(0, 1fr);
@@ -113,6 +126,34 @@
       color: #b9d8ff;
       font-size: 10px;
       font-weight: 650;
+    }
+    .site-mode {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 5px;
+      margin-top: 2px;
+    }
+    .mode-btn {
+      min-width: 0;
+      height: 24px;
+      border-radius: 6px;
+      padding: 0 6px;
+      font-size: 11px;
+      font-weight: 650;
+      background: rgba(255,255,255,.08);
+    }
+    .mode-btn.active {
+      border-color: rgba(10,132,255,.8);
+      background: rgba(10,132,255,.32);
+      color: #e8f3ff;
+    }
+    .delete-btn {
+      min-width: 30px;
+      width: 30px;
+      padding: 0;
+      color: #ffd7d7;
+      background: rgba(255,95,87,.16);
     }
     .frame-wrap { position: relative; min-height: 0; background: #fff; }
     iframe {
@@ -180,6 +221,8 @@
       .toolbar { grid-template-columns: auto 1fr auto auto; }
       .nav-group.secondary { display: none; }
       .suggestions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .bookmark-editor { grid-template-columns: 1fr 1fr; }
+      .bookmark-editor input[name="url"] { grid-column: 1 / -1; }
     }
     @media (max-width: 420px) {
       .suggestions { grid-template-columns: 1fr; }
@@ -204,11 +247,11 @@
   <main class="workspace">
     <section class="suggestions" id="suggestions" aria-label="Suggested websites"></section>
     <div class="frame-wrap">
-      <iframe id="browser-frame" credentialless referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts allow-same-origin"></iframe>
+      <iframe id="browser-frame" credentialless referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts"></iframe>
       <div class="external-panel" id="external-panel" hidden>
         <div class="external-card">
-          <h1>Open in a real browser tab</h1>
-          <p>This website does not allow embedded browsers. Use a normal browser tab for the full site.</p>
+          <h1 id="external-title">Open in a real browser tab</h1>
+          <p id="external-message">This website does not allow embedded browsers. Use a normal browser tab for the full site.</p>
           <div class="target" id="external-target"></div>
           <button type="button" class="primary" id="open-current-btn">Open Site</button>
         </div>
@@ -218,6 +261,8 @@
   </main>
 
   <script type="module">
+    const MODE_STORAGE_KEY = 'vortex_browser_site_modes';
+    const CUSTOM_STORAGE_KEY = 'vortex_browser_custom_sites';
     const EXTERNAL_ONLY_HOSTS = new Set([
       'chatgpt.com',
       'github.com',
@@ -226,20 +271,22 @@
       'vercel.com'
     ]);
     const DEFAULT_SITES = [
-      { title: 'Yap Wei Jun', url: 'https://yapweijun1996.com/', icon: 'YW' },
-      { title: 'GitHub Profile', url: 'https://github.com/yapweijun1996', icon: 'GH', externalOnly: true },
-      { title: 'GitHub', url: 'https://github.com/', icon: 'GH', externalOnly: true },
-      { title: 'OpenAI', url: 'https://openai.com/', icon: 'AI', externalOnly: true },
-      { title: 'ChatGPT', url: 'https://chatgpt.com/', icon: 'CG', externalOnly: true },
-      { title: 'MDN Web Docs', url: 'https://developer.mozilla.org/', icon: 'MD' },
-      { title: 'npm', url: 'https://www.npmjs.com/', icon: 'np' },
-      { title: 'Vercel', url: 'https://vercel.com/', icon: '▲', externalOnly: true }
+      { id: 'yapweijun', title: 'Yap Wei Jun', url: 'https://yapweijun1996.com/', icon: 'YW', defaultMode: 'embed' },
+      { id: 'github-profile', title: 'GitHub Profile', url: 'https://github.com/yapweijun1996', icon: 'GH', defaultMode: 'tab', externalOnly: true },
+      { id: 'github', title: 'GitHub', url: 'https://github.com/', icon: 'GH', defaultMode: 'tab', externalOnly: true },
+      { id: 'openai', title: 'OpenAI', url: 'https://openai.com/', icon: 'AI', defaultMode: 'tab', externalOnly: true },
+      { id: 'chatgpt', title: 'ChatGPT', url: 'https://chatgpt.com/', icon: 'CG', defaultMode: 'tab', externalOnly: true },
+      { id: 'mdn', title: 'MDN Web Docs', url: 'https://developer.mozilla.org/', icon: 'MD', defaultMode: 'embed' },
+      { id: 'npm', title: 'npm', url: 'https://www.npmjs.com/', icon: 'np', defaultMode: 'embed' },
+      { id: 'vercel', title: 'Vercel', url: 'https://vercel.com/', icon: '▲', defaultMode: 'tab', externalOnly: true }
     ];
 
     const form = document.getElementById('browser-form');
     const input = document.getElementById('address-input');
     const frame = document.getElementById('browser-frame');
     const externalPanel = document.getElementById('external-panel');
+    const externalTitle = document.getElementById('external-title');
+    const externalMessage = document.getElementById('external-message');
     const externalTarget = document.getElementById('external-target');
     const suggestions = document.getElementById('suggestions');
     const status = document.getElementById('status');
@@ -252,7 +299,83 @@
     const historyStack = [];
     let historyIndex = -1;
     let currentUrl = DEFAULT_SITES[0].url;
+    let siteModes = loadSiteModes();
+    let customSites = loadCustomSites();
     let statusTimer = null;
+
+    function loadSiteModes() {
+      try {
+        const value = JSON.parse(localStorage.getItem(MODE_STORAGE_KEY) || '{}');
+        return value && typeof value === 'object' ? value : {};
+      } catch {
+        return {};
+      }
+    }
+
+    function saveSiteModes() {
+      localStorage.setItem(MODE_STORAGE_KEY, JSON.stringify(siteModes));
+    }
+
+    function loadCustomSites() {
+      try {
+        const value = JSON.parse(localStorage.getItem(CUSTOM_STORAGE_KEY) || '[]');
+        if (!Array.isArray(value)) return [];
+        return value.filter((site) =>
+          site &&
+          typeof site.id === 'string' &&
+          typeof site.title === 'string' &&
+          typeof site.url === 'string'
+        );
+      } catch {
+        return [];
+      }
+    }
+
+    function saveCustomSites() {
+      localStorage.setItem(CUSTOM_STORAGE_KEY, JSON.stringify(customSites));
+    }
+
+    function allSites() {
+      return [...DEFAULT_SITES, ...customSites];
+    }
+
+    function siteMode(site) {
+      const saved = siteModes[site.id];
+      if (saved === 'embed' || saved === 'tab') return saved;
+      return site.defaultMode || (site.externalOnly ? 'tab' : 'embed');
+    }
+
+    function setSiteMode(site, mode) {
+      siteModes = { ...siteModes, [site.id]: mode };
+      saveSiteModes();
+      renderSuggestions();
+      setStatus(`${site.title} opens in ${mode === 'tab' ? 'a browser tab' : 'the Web OS window'}`);
+    }
+
+    function addCustomSite({ title, url, icon }) {
+      const target = normalizeTarget(url);
+      const next = {
+        id: `custom-${Date.now()}`,
+        title: title.trim(),
+        url: target,
+        icon: (icon.trim() || title.trim().slice(0, 2) || '★').slice(0, 2),
+        defaultMode: externalOnly(target) ? 'tab' : 'embed',
+        custom: true
+      };
+      customSites = [...customSites, next];
+      saveCustomSites();
+      renderSuggestions();
+      setStatus(`Added bookmark: ${next.title}`);
+    }
+
+    function deleteCustomSite(site) {
+      customSites = customSites.filter((item) => item.id !== site.id);
+      delete siteModes[site.id];
+      saveCustomSites();
+      saveSiteModes();
+      renderSuggestions();
+      setStatus(`Removed bookmark: ${site.title}`);
+    }
 
     function normalizeTarget(value) {
       const raw = value.trim();
@@ -287,17 +410,21 @@
       window.open(url, '_blank', 'noopener,noreferrer');
     }
 
-    function showExternalPanel(url, { open = false } = {}) {
+    function showExternalPanel(url, { open = false, blocked = false } = {}) {
       currentUrl = url;
       input.value = url;
+      externalTitle.textContent = blocked ? 'Embedding blocked by this website' : 'Open in a real browser tab';
+      externalMessage.textContent = blocked
+        ? 'This site sends browser security headers such as X-Frame-Options or frame-ancestors, so Web OS cannot display it inside an iframe.'
+        : 'This bookmark is set to open in a normal browser tab for the full site.';
       externalTarget.textContent = url;
       externalPanel.hidden = false;
       frame.removeAttribute('src');
       if (open) openExternal(url);
-      setStatus('Opened in a browser tab');
+      setStatus(open ? 'Opened in a browser tab' : 'Open this site in a browser tab');
     }
 
-    function navigate(url, { push = true, openBlocked = false } = {}) {
+    function navigate(url, { push = true, mode = 'embed', openBlocked = false } = {}) {
       const target = normalizeTarget(url);
       currentUrl = target;
       input.value = target;
@@ -307,8 +434,12 @@
         historyIndex = historyStack.length - 1;
       }
       setNavState();
-      if (externalOnly(target)) {
+      if (mode === 'tab') {
         showExternalPanel(target, { open: openBlocked });
+        return;
+      }
+      if (externalOnly(target)) {
+        showExternalPanel(target, { blocked: true });
         return;
       }
       externalPanel.hidden = true;
@@ -316,14 +447,61 @@
       setStatus(`Loading ${new URL(target).hostname}`);
     }
 
+    function renderBookmarkEditor() {
+      const editor = document.createElement('div');
+      editor.className = 'bookmark-editor';
+
+      const title = document.createElement('input');
+      title.name = 'title';
+      title.placeholder = 'Bookmark name';
+      title.autocomplete = 'off';
+      title.setAttribute('aria-label', 'Bookmark name');
+
+      const url = document.createElement('input');
+      url.name = 'url';
+      url.placeholder = 'https://example.com';
+      url.autocomplete = 'url';
+      url.setAttribute('aria-label', 'Bookmark URL');
+
+      const icon = document.createElement('input');
+      icon.name = 'icon';
+      icon.placeholder = 'Icon';
+      icon.maxLength = 2;
+      icon.autocomplete = 'off';
+      icon.setAttribute('aria-label', 'Bookmark icon');
+
+      const add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'primary';
+      add.textContent = 'Add';
+      add.addEventListener('click', () => {
+        if (!title.value.trim() || !url.value.trim()) {
+          setStatus('Bookmark name and URL are required');
+          return;
+        }
+        addCustomSite({ title: title.value, url: url.value, icon: icon.value });
+      });
+
+      editor.append(title, url, icon, add);
+      return editor;
+    }
+
     function renderSuggestions() {
-      suggestions.replaceChildren();
-      DEFAULT_SITES.forEach((site) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'site';
-        button.title = site.url;
-        button.addEventListener('click', () => navigate(site.url, { openBlocked: true }));
+      suggestions.replaceChildren(renderBookmarkEditor());
+      allSites().forEach((site) => {
+        const mode = siteMode(site);
+        const item = document.createElement('div');
+        item.className = 'site';
+        item.title = site.url;
+        item.tabIndex = 0;
+        item.setAttribute('role', 'button');
+        item.addEventListener('click', () => navigate(site.url, { mode, openBlocked: true }));
+        item.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            navigate(site.url, { mode, openBlocked: true });
+          }
+        });
 
         const icon = document.createElement('div');
         icon.className = 'site-icon';
@@ -337,21 +515,50 @@
         url.className = 'site-url';
         url.textContent = site.url.replace(/^https?:\/\//, '');
         copy.append(title, url);
-        if (site.externalOnly) {
+        if (mode === 'tab') {
           const badge = document.createElement('div');
           badge.className = 'site-badge';
           badge.textContent = 'NEW TAB';
           copy.appendChild(badge);
         }
 
-        button.append(icon, copy);
-        suggestions.appendChild(button);
+        const controls = document.createElement('div');
+        controls.className = 'site-mode';
+        ['embed', 'tab'].forEach((option) => {
+          const modeButton = document.createElement('button');
+          modeButton.type = 'button';
+          modeButton.className = 'mode-btn' + (mode === option ? ' active' : '');
+          modeButton.textContent = option === 'embed' ? 'Embed' : 'Tab';
+          modeButton.setAttribute('aria-pressed', mode === option ? 'true' : 'false');
+          modeButton.addEventListener('click', (event) => {
+            event.stopPropagation();
+            setSiteMode(site, option);
+          });
+          controls.appendChild(modeButton);
+        });
+        if (site.custom) {
+          const deleteButton = document.createElement('button');
+          deleteButton.type = 'button';
+          deleteButton.className = 'delete-btn';
+          deleteButton.title = `Delete ${site.title}`;
+          deleteButton.setAttribute('aria-label', `Delete ${site.title}`);
+          deleteButton.textContent = '×';
+          deleteButton.addEventListener('click', (event) => {
+            event.stopPropagation();
+            deleteCustomSite(site);
+          });
+          controls.appendChild(deleteButton);
+        }
+
+        item.append(icon, copy, controls);
+        suggestions.appendChild(item);
       });
     }
 
     form.addEventListener('submit', (event) => {
       event.preventDefault();
-      navigate(input.value, { openBlocked: true });
+      const target = normalizeTarget(input.value);
+      navigate(target, { mode: externalOnly(target) ? 'tab' : 'embed', openBlocked: true });
     });
 
     backBtn.addEventListener('click', () => {
