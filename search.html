@@ -19,7 +19,6 @@
       flex-direction: column;
     }
 
-    /* Search bar header */
     #search-header {
       flex-shrink: 0;
       display: flex;
@@ -47,11 +46,7 @@
       box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25);
     }
 
-    .search-icon {
-      flex-shrink: 0;
-      color: #98989f;
-      line-height: 1;
-    }
+    .search-icon { flex-shrink: 0; color: #98989f; line-height: 1; }
 
     #query {
       flex: 1;
@@ -62,8 +57,25 @@
       font-size: 13px;
       min-width: 0;
     }
-
     #query::placeholder { color: #636366; }
+
+    #clear-input-btn {
+      flex-shrink: 0;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: none;
+      background: #636366;
+      color: #1a1a1c;
+      font-size: 10px;
+      line-height: 1;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+    #clear-input-btn.visible { display: flex; }
 
     #search-btn {
       flex-shrink: 0;
@@ -77,7 +89,6 @@
       cursor: pointer;
       font-family: inherit;
     }
-
     #search-btn:hover { background: #228cff; }
     #search-btn:active { background: #0070d8; }
 
@@ -106,60 +117,119 @@
       cursor: pointer;
       transition: background 0.12s;
     }
-
     .cat-btn:hover { background: rgba(255, 255, 255, 0.16); }
-    .cat-btn.active {
-      background: #0a84ff;
-      border-color: #0a84ff;
-      color: #fff;
-    }
+    .cat-btn.active { background: #0a84ff; border-color: #0a84ff; color: #fff; }
 
     /* Results frame */
-    #results-frame {
-      flex: 1;
-      border: none;
-      background: #fff;
-    }
+    #results-frame { flex: 1; border: none; background: #fff; }
 
-    /* Home screen shown before first search */
+    /* Home screen */
     #home {
       flex: 1;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      gap: 24px;
-      padding: 32px 24px;
+      padding: 28px 24px 24px;
+      gap: 20px;
+      overflow-y: auto;
     }
 
-    #home h1 {
-      font-size: 22px;
+    .home-title { font-size: 22px; font-weight: 600; margin: 0; color: #f2f2f7; }
+    .home-sub { font-size: 12px; color: #636366; margin: 0; }
+
+    /* Recent searches */
+    #recent-section {
+      width: 100%;
+      max-width: 420px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .section-label {
+      font-size: 11px;
       font-weight: 600;
-      margin: 0;
-      color: #f2f2f7;
-    }
-
-    #home p {
-      font-size: 13px;
       color: #98989f;
-      margin: 0;
-      text-align: center;
-      line-height: 1.55;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
 
+    #clear-history-btn {
+      background: none;
+      border: none;
+      color: #0a84ff;
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+      padding: 0;
+    }
+    #clear-history-btn:hover { color: #228cff; }
+
+    #recent-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .recent-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px 4px 12px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 0.5px solid rgba(255, 255, 255, 0.12);
+      border-radius: 999px;
+      font-size: 12px;
+      color: #ebebf5;
+      cursor: pointer;
+      transition: background 0.12s;
+      max-width: 200px;
+    }
+    .recent-chip:hover { background: rgba(255, 255, 255, 0.15); }
+
+    .recent-chip-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .recent-chip-remove {
+      flex-shrink: 0;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255, 255, 255, 0.18);
+      color: #98989f;
+      font-size: 9px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      font-family: inherit;
+    }
+    .recent-chip-remove:hover { background: rgba(255, 255, 255, 0.3); color: #f2f2f7; }
+
+    /* Quick links */
     .quick-links {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 8px;
       width: 100%;
-      max-width: 400px;
+      max-width: 420px;
     }
 
     .quick-link {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       padding: 12px 8px;
       border: 0.5px solid rgba(255, 255, 255, 0.1);
       border-radius: 12px;
@@ -171,9 +241,8 @@
       transition: background 0.12s;
       text-align: center;
     }
-
     .quick-link:hover { background: rgba(255, 255, 255, 0.14); }
-    .quick-link-icon { font-size: 22px; }
+    .quick-link-icon { font-size: 20px; }
   </style>
 </head>
 <body>
@@ -183,6 +252,7 @@
         <svg width="13" height="13" viewBox="0 0 16 16"><circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="10" y1="10" x2="14.5" y2="14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       </span>
       <input id="query" type="text" placeholder="Search the web..." autocomplete="off" spellcheck="false">
+      <button type="button" id="clear-input-btn" aria-label="Clear">✕</button>
       <button type="submit" id="search-btn">Search</button>
     </form>
   </div>
@@ -198,8 +268,17 @@
   </div>
 
   <div id="home">
-    <h1>Search</h1>
-    <p>Powered by SearXNG · private, self-hosted web search</p>
+    <h1 class="home-title">Search</h1>
+    <p class="home-sub">Powered by SearXNG · private, self-hosted</p>
+
+    <div id="recent-section" style="display:none;">
+      <div class="section-header">
+        <span class="section-label">Recent</span>
+        <button id="clear-history-btn">Clear</button>
+      </div>
+      <div id="recent-chips"></div>
+    </div>
+
     <div class="quick-links">
       <button class="quick-link" onclick="fillAndSearch('Vortex OS web OS')">
         <span class="quick-link-icon">🌌</span>Vortex OS
@@ -216,7 +295,7 @@
       <button class="quick-link" onclick="fillAndSearch('npm package registry')">
         <span class="quick-link-icon">📦</span>npm
       </button>
-      <button class="quick-link" onclick="fillAndSearch('CSS Tricks web dev')">
+      <button class="quick-link" onclick="fillAndSearch('CSS tricks web dev')">
         <span class="quick-link-icon">🎨</span>CSS Tricks
       </button>
     </div>
@@ -225,12 +304,87 @@
   <iframe id="results-frame" title="Search results" style="display:none;"></iframe>
 
   <script>
-    const SEARXNG = 'https://search.yapweijun1996.com';
-    const input   = document.getElementById('query');
-    const frame   = document.getElementById('results-frame');
-    const home    = document.getElementById('home');
-    let activeCategory = '';
+    const SEARXNG    = 'https://search.yapweijun1996.com';
+    const HISTORY_KEY = 'vortex_search_history';
+    const MAX_HISTORY = 8;
 
+    const input         = document.getElementById('query');
+    const frame         = document.getElementById('results-frame');
+    const home          = document.getElementById('home');
+    const clearInputBtn = document.getElementById('clear-input-btn');
+    const recentSection = document.getElementById('recent-section');
+    const recentChips   = document.getElementById('recent-chips');
+    const clearHistBtn  = document.getElementById('clear-history-btn');
+    let activeCategory  = '';
+
+    // ── History helpers ──────────────────────────────────────────
+    function loadHistory() {
+      try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); }
+      catch { return []; }
+    }
+
+    function saveHistory(list) {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+    }
+
+    function pushHistory(q) {
+      const list = loadHistory().filter(x => x !== q);
+      list.unshift(q);
+      saveHistory(list.slice(0, MAX_HISTORY));
+    }
+
+    function removeHistory(q) {
+      saveHistory(loadHistory().filter(x => x !== q));
+      renderHistory();
+    }
+
+    function renderHistory() {
+      const list = loadHistory();
+      if (!list.length) { recentSection.style.display = 'none'; return; }
+      recentSection.style.display = 'block';
+      recentChips.innerHTML = '';
+      list.forEach(q => {
+        const chip = document.createElement('span');
+        chip.className = 'recent-chip';
+
+        const text = document.createElement('span');
+        text.className = 'recent-chip-text';
+        text.textContent = q;
+        text.title = q;
+        text.addEventListener('click', () => fillAndSearch(q));
+
+        const rm = document.createElement('button');
+        rm.className = 'recent-chip-remove';
+        rm.textContent = '✕';
+        rm.title = 'Remove';
+        rm.addEventListener('click', (e) => { e.stopPropagation(); removeHistory(q); });
+
+        chip.append(text, rm);
+        recentChips.appendChild(chip);
+      });
+    }
+
+    clearHistBtn.addEventListener('click', () => {
+      saveHistory([]);
+      renderHistory();
+    });
+
+    // ── Input live clear button ──────────────────────────────────
+    input.addEventListener('input', () => {
+      clearInputBtn.classList.toggle('visible', input.value.length > 0);
+    });
+
+    clearInputBtn.addEventListener('click', () => {
+      input.value = '';
+      clearInputBtn.classList.remove('visible');
+      // Return to home if results are showing
+      frame.style.display = 'none';
+      home.style.display = 'flex';
+      renderHistory();
+      input.focus();
+    });
+
+    // ── Category pills ───────────────────────────────────────────
     document.querySelectorAll('.cat-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
@@ -240,15 +394,20 @@
       });
     });
 
+    // ── Search ───────────────────────────────────────────────────
     function buildUrl(q) {
       const params = new URLSearchParams({ q });
-      if (activeCategory) params.set('category_general', '0'), params.set(`category_${activeCategory}`, '1');
+      if (activeCategory) {
+        params.set('category_general', '0');
+        params.set(`category_${activeCategory}`, '1');
+      }
       return `${SEARXNG}/?${params}`;
     }
 
     function doSearch() {
       const q = input.value.trim();
       if (!q) return;
+      pushHistory(q);
       home.style.display = 'none';
       frame.style.display = 'block';
       frame.src = buildUrl(q);
@@ -256,9 +415,12 @@
 
     function fillAndSearch(q) {
       input.value = q;
+      clearInputBtn.classList.add('visible');
       doSearch();
     }
 
+    // ── Init ─────────────────────────────────────────────────────
+    renderHistory();
     input.focus();
   </script>
 </body>

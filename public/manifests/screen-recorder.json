@@ -1,0 +1,9 @@
+{
+  "id": "screen-recorder",
+  "name": "Screen Recorder",
+  "version": "1.0.0",
+  "description": "Browser-based screen and tab recorder with video editing. No install required.",
+  "entrypoint": "https://yapweijun1996.github.io/Screen-Recorder-React-JS-Frontend/",
+  "permissions": [],
+  "web_app": true
+}

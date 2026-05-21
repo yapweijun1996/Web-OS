@@ -1,0 +1,9 @@
+{
+  "id": "xor-cipher",
+  "name": "XOR Cipher",
+  "version": "1.0.0",
+  "description": "Browser-based XOR cipher encryption and decryption tool. All processing is local.",
+  "entrypoint": "https://yapweijun1996.github.io/XOR-Cipher-Tool/",
+  "permissions": [],
+  "web_app": true
+}

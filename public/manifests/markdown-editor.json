@@ -1,0 +1,9 @@
+{
+  "id": "markdown-editor",
+  "name": "Markdown Editor",
+  "version": "1.0.0",
+  "description": "Offline Markdown editor with live preview, Mermaid diagram support, and .docx export.",
+  "entrypoint": "https://yapweijun1996.github.io/Markdown-Editor/",
+  "permissions": [],
+  "web_app": true
+}

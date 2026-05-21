@@ -1,0 +1,9 @@
+{
+  "id": "coldfusion-beautifier",
+  "name": "ColdFusion Beautifier",
+  "version": "1.0.0",
+  "description": "Format and beautify ColdFusion / CFML code in the browser. Paste code to clean it up instantly.",
+  "entrypoint": "https://yapweijun1996.github.io/ColdFusion-Code-Beautifier/",
+  "permissions": [],
+  "web_app": true
+}

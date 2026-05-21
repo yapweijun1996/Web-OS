@@ -1,0 +1,9 @@
+{
+  "id": "stock-dashboard",
+  "name": "Stock Dashboard",
+  "version": "1.0.0",
+  "description": "Live stock market dashboard covering USA, Singapore, and Malaysia markets. No API key required.",
+  "entrypoint": "https://yapweijun1996.github.io/API-Stock-USA-SG-MY-Demo/",
+  "permissions": [],
+  "web_app": true
+}

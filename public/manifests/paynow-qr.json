@@ -1,0 +1,9 @@
+{
+  "id": "paynow-qr",
+  "name": "PayNow QR",
+  "version": "1.0.0",
+  "description": "Generate Singapore PayNow QR codes instantly in the browser. No data leaves your device.",
+  "entrypoint": "https://yapweijun1996.github.io/PayNow-QR-Generator/",
+  "permissions": [],
+  "web_app": true
+}

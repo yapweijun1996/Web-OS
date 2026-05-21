@@ -1,0 +1,9 @@
+{
+  "id": "ocr-image-ai",
+  "name": "OCR Image AI",
+  "version": "1.0.0",
+  "description": "Browser-native image-to-text OCR powered by AI. Paste or drag images to extract text.",
+  "entrypoint": "https://yapweijun1996.github.io/OCR-Image-AI/",
+  "permissions": [],
+  "web_app": true
+}

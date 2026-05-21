@@ -1,0 +1,9 @@
+{
+  "id": "pdf-reader",
+  "name": "PDF Reader",
+  "version": "1.0.0",
+  "description": "PWA for reading PDFs in-browser with AI-powered highlight translation.",
+  "entrypoint": "https://yapweijun1996.github.io/PDF-Reader/",
+  "permissions": [],
+  "web_app": true
+}
