@@ -264,6 +264,43 @@
       width: 100%;
     }
 
+    /* Manage mode */
+    .apps-grid.manage-mode .app-tile { position: relative; }
+
+    .app-tile-remove {
+      display: none;
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(28, 28, 30, 0.8);
+      background: #ff453a;
+      color: #fff;
+      font-size: 9px;
+      line-height: 1;
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      font-family: inherit;
+      z-index: 2;
+    }
+    .apps-grid.manage-mode .app-tile-remove { display: flex; }
+
+    #manage-apps-btn, #done-manage-btn {
+      background: none;
+      border: none;
+      color: #0a84ff;
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+      padding: 0;
+    }
+    #manage-apps-btn:hover, #done-manage-btn:hover { color: #228cff; }
+    #done-manage-btn { display: none; }
+
     /* Quick links */
     .quick-links {
       display: grid;
@@ -330,6 +367,10 @@
     <div id="apps-section" style="display:none;">
       <div class="section-header">
         <span class="section-label">Apps</span>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button id="manage-apps-btn">Manage</button>
+          <button id="done-manage-btn">Done</button>
+        </div>
       </div>
       <div id="apps-grid" class="apps-grid"></div>
     </div>
@@ -475,21 +516,47 @@
     }
 
     // ── Apps ─────────────────────────────────────────────────────
-    const APPS_KEY    = 'vortex_installed_apps';
-    const appsSection = document.getElementById('apps-section');
-    const appsGrid    = document.getElementById('apps-grid');
+    const APPS_KEY      = 'vortex_installed_apps';
+    const appsSection   = document.getElementById('apps-section');
+    const appsGrid      = document.getElementById('apps-grid');
+    const manageBtn     = document.getElementById('manage-apps-btn');
+    const doneBtn       = document.getElementById('done-manage-btn');
+    let manageMode      = false;
+
+    function setManageMode(on) {
+      manageMode = on;
+      appsGrid.classList.toggle('manage-mode', on);
+      manageBtn.style.display = on ? 'none' : '';
+      doneBtn.style.display   = on ? '' : 'none';
+    }
+
+    manageBtn.addEventListener('click', () => setManageMode(true));
+    doneBtn.addEventListener('click',   () => setManageMode(false));
+
+    function uninstallApp(id) {
+      let apps = [];
+      try { apps = JSON.parse(localStorage.getItem(APPS_KEY) || '[]'); } catch {}
+      localStorage.setItem(APPS_KEY, JSON.stringify(apps.filter(a => a.manifest.id !== id)));
+      renderApps();
+    }
 
     function renderApps() {
       let apps = [];
       try { apps = JSON.parse(localStorage.getItem(APPS_KEY) || '[]'); } catch {}
       const webApps = apps.filter(a => a.manifest && a.manifest.web_app === true);
-      if (!webApps.length) { appsSection.style.display = 'none'; return; }
+      if (!webApps.length) { appsSection.style.display = 'none'; setManageMode(false); return; }
       appsSection.style.display = 'block';
       appsGrid.innerHTML = '';
       webApps.forEach(({ manifest }) => {
         const tile = document.createElement('button');
         tile.className = 'app-tile';
         tile.title = manifest.description || manifest.name;
+
+        const rm = document.createElement('button');
+        rm.className = 'app-tile-remove';
+        rm.textContent = '✕';
+        rm.title = `Uninstall ${manifest.name}`;
+        rm.addEventListener('click', (e) => { e.stopPropagation(); uninstallApp(manifest.id); });
 
         const icon = document.createElement('span');
         icon.className = 'app-tile-icon';
@@ -499,8 +566,9 @@
         name.className = 'app-tile-name';
         name.textContent = manifest.name;
 
-        tile.append(icon, name);
+        tile.append(rm, icon, name);
         tile.addEventListener('click', () => {
+          if (manageMode) return;
           const p = window.parent;
           if (p && typeof p.openWebApp === 'function') {
             p.openWebApp(
@@ -516,6 +584,8 @@
         });
         appsGrid.appendChild(tile);
       });
+      // re-apply manage mode class after re-render
+      appsGrid.classList.toggle('manage-mode', manageMode);
     }
 
     window.addEventListener('storage', e => { if (e.key === APPS_KEY) renderApps(); });
