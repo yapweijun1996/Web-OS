@@ -182,10 +182,15 @@ function sanitizeManifest(raw, manifestUrl) {
   // entrypoint in an unsandboxed system window (for trusted external PWAs).
   const web_app = raw.web_app === true;
 
+  // icon: short emoji string displayed on the desktop squircle tile and in
+  // the App Launcher window. Capped at 8 chars to accommodate multi-codepoint
+  // sequences; silently drops anything longer or non-string.
+  const icon = (typeof raw.icon === 'string') ? raw.icon.trim().slice(0, 8) : '';
+
   // Store the fully-resolved absolute URL so launchPlugin never needs to
   // re-resolve a relative path against a manifestUrl, closing the supply-chain
   // attack where a CDN package update silently changes the entrypoint.
-  return { id, name, version, entrypoint: resolvedEntrypoint.href, permissions, sandbox, web_app };
+  return { id, name, version, entrypoint: resolvedEntrypoint.href, permissions, sandbox, web_app, icon };
 }
 
 // Public entry point: validate origin -> fetch (direct or proxied) -> parse ->

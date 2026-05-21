@@ -5,5 +5,6 @@
   "description": "Browser-native image-to-text OCR powered by AI. Paste or drag images to extract text.",
   "entrypoint": "https://yapweijun1996.github.io/OCR-Image-AI/",
   "permissions": [],
-  "web_app": true
+  "web_app": true,
+  "icon": "👁️"
 }

@@ -5,5 +5,6 @@
   "description": "macOS-style desktop demo with Spotlight, Mission Control, windows, and Dock. Built with React.",
   "entrypoint": "https://yapweijun1996.github.io/Web-OS-Demo/",
   "permissions": [],
-  "web_app": true
+  "web_app": true,
+  "icon": "🖥️"
 }

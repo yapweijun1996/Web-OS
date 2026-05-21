@@ -216,6 +216,54 @@
     }
     .recent-chip-remove:hover { background: rgba(255, 255, 255, 0.3); color: #f2f2f7; }
 
+    /* Apps section */
+    #apps-section { width: 100%; max-width: 420px; }
+
+    .apps-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .app-tile {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      padding: 10px 6px;
+      border: 0.5px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.06);
+      color: #ebebf5;
+      font-size: 10px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.12s;
+      text-align: center;
+      overflow: hidden;
+    }
+    .app-tile:hover { background: rgba(255, 255, 255, 0.14); }
+
+    .app-tile-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      font-size: 22px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+      background: linear-gradient(145deg, #32ade6, #0a74d8);
+      flex-shrink: 0;
+    }
+
+    .app-tile-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      width: 100%;
+    }
+
     /* Quick links */
     .quick-links {
       display: grid;
@@ -277,6 +325,13 @@
         <button id="clear-history-btn">Clear</button>
       </div>
       <div id="recent-chips"></div>
+    </div>
+
+    <div id="apps-section" style="display:none;">
+      <div class="section-header">
+        <span class="section-label">Apps</span>
+      </div>
+      <div id="apps-grid" class="apps-grid"></div>
     </div>
 
     <div class="quick-links">
@@ -419,7 +474,54 @@
       doSearch();
     }
 
+    // ── Apps ─────────────────────────────────────────────────────
+    const APPS_KEY    = 'vortex_installed_apps';
+    const appsSection = document.getElementById('apps-section');
+    const appsGrid    = document.getElementById('apps-grid');
+
+    function renderApps() {
+      let apps = [];
+      try { apps = JSON.parse(localStorage.getItem(APPS_KEY) || '[]'); } catch {}
+      const webApps = apps.filter(a => a.manifest && a.manifest.web_app === true);
+      if (!webApps.length) { appsSection.style.display = 'none'; return; }
+      appsSection.style.display = 'block';
+      appsGrid.innerHTML = '';
+      webApps.forEach(({ manifest }) => {
+        const tile = document.createElement('button');
+        tile.className = 'app-tile';
+        tile.title = manifest.description || manifest.name;
+
+        const icon = document.createElement('span');
+        icon.className = 'app-tile-icon';
+        icon.textContent = manifest.icon || '🌐';
+
+        const name = document.createElement('span');
+        name.className = 'app-tile-name';
+        name.textContent = manifest.name;
+
+        tile.append(icon, name);
+        tile.addEventListener('click', () => {
+          const p = window.parent;
+          if (p && typeof p.openWebApp === 'function') {
+            p.openWebApp(
+              manifest.name,
+              manifest.entrypoint,
+              'linear-gradient(145deg, #32ade6, #0a74d8)',
+              manifest.icon || '🌐',
+              manifest.description || ''
+            );
+          } else {
+            window.open(manifest.entrypoint, '_blank', 'noopener');
+          }
+        });
+        appsGrid.appendChild(tile);
+      });
+    }
+
+    window.addEventListener('storage', e => { if (e.key === APPS_KEY) renderApps(); });
+
     // ── Init ─────────────────────────────────────────────────────
+    renderApps();
     renderHistory();
     input.focus();
   </script>

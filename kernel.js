@@ -227,6 +227,10 @@ function openMarkdownEditor() {
   );
 }
 
+// Expose so same-origin iframes (e.g. search.html) can launch web apps
+// back into the parent desktop without a postMessage round-trip.
+window.openWebApp = openWebApp;
+
 // Advanced Window Opener for Sandboxed Plugins.
 window.launchPlugin = function(manifest, manifestUrl) {
   // Re-validate the manifest origin at launch time so a manipulated
@@ -253,8 +257,8 @@ window.launchPlugin = function(manifest, manifestUrl) {
     openWebApp(
       manifest.name,
       resolvedEntrypoint,
-      'linear-gradient(145deg, #bf5af2, #8944c0)',
-      '🌐',
+      'linear-gradient(145deg, #32ade6, #0a74d8)',
+      manifest.icon || '🌐',
       manifest.description || ''
     );
     return;
@@ -286,8 +290,9 @@ function renderInstalledApps() {
     icon.onclick = () => window.launchPlugin(app.manifest, app.manifestUrl);
 
     const iconImg = document.createElement('span');
-    iconImg.className = 'icon-img squircle icon-plugin';
-    iconImg.textContent = '🧩';
+    const isWebApp = app.manifest.web_app === true;
+    iconImg.className = `icon-img squircle ${isWebApp ? 'icon-webapp' : 'icon-plugin'}`;
+    iconImg.textContent = (isWebApp && app.manifest.icon) ? app.manifest.icon : (isWebApp ? '🌐' : '🧩');
 
     const iconLabel = document.createElement('span');
     iconLabel.className = 'icon-label';

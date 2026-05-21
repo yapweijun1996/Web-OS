@@ -5,5 +5,6 @@
   "description": "Live stock market dashboard covering USA, Singapore, and Malaysia markets. No API key required.",
   "entrypoint": "https://yapweijun1996.github.io/API-Stock-USA-SG-MY-Demo/",
   "permissions": [],
-  "web_app": true
+  "web_app": true,
+  "icon": "📈"
 }
