@@ -17,6 +17,7 @@ The Vite multi-page build emits `dist/browser.html`, and the app can be opened f
 Default suggestions are intentionally small and editable at runtime:
 
 - Yap Wei Jun: `https://yapweijun1996.com/`
+- GitHub Pages: `https://yapweijun1996.github.io/Web-OS/`
 - GitHub Profile: `https://github.com/yapweijun1996`
 - GitHub: `https://github.com/`
 - OpenAI: `https://openai.com/`
@@ -32,7 +33,7 @@ Browser suggestions can open in two modes:
 - **Embed** loads the target URL inside the app iframe.
 - **Tab** opens the target in a normal browser tab and shows an external-tab panel in Vortex OS.
 
-The Yap Wei Jun site is a controlled first-party embed target. It keeps its own iframe origin so its CSS, JavaScript modules, and service-worker checks can run normally inside WebOS.
+The Yap Wei Jun site and Yap Wei Jun GitHub Pages site are controlled first-party embed targets. They keep their own iframe origin so CSS, JavaScript modules, and service-worker checks can run normally inside WebOS.
 
 External-only defaults, including GitHub, OpenAI, ChatGPT, Google, and Vercel, start in Tab mode to avoid blank frames and sandbox/CORS console noise.
 

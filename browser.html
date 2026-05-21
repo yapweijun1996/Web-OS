@@ -268,7 +268,8 @@
     const BASE_FRAME_SANDBOX = 'allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts';
     const SAME_ORIGIN_FRAME_SANDBOX = `${BASE_FRAME_SANDBOX} allow-same-origin`;
     const EMBED_SAME_ORIGIN_HOSTS = new Set([
-      'yapweijun1996.com'
+      'yapweijun1996.com',
+      'yapweijun1996.github.io'
     ]);
     const EXTERNAL_ONLY_HOSTS = new Set([
       'chatgpt.com',
@@ -279,6 +280,7 @@
     ]);
     const DEFAULT_SITES = [
       { id: 'yapweijun', title: 'Yap Wei Jun', url: 'https://yapweijun1996.com/', icon: 'YW', defaultMode: 'embed' },
+      { id: 'github-pages', title: 'GitHub Pages', url: 'https://yapweijun1996.github.io/Web-OS/', icon: 'GP', defaultMode: 'embed' },
       { id: 'github-profile', title: 'GitHub Profile', url: 'https://github.com/yapweijun1996', icon: 'GH', defaultMode: 'tab', externalOnly: true },
       { id: 'github', title: 'GitHub', url: 'https://github.com/', icon: 'GH', defaultMode: 'tab', externalOnly: true },
       { id: 'openai', title: 'OpenAI', url: 'https://openai.com/', icon: 'AI', defaultMode: 'tab', externalOnly: true },
