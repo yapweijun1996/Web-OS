@@ -325,6 +325,7 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
   - Address input accepts full URLs, bare domains, and search terms.
   - Each bookmark can choose Embed or Tab mode, with custom bookmark add/delete support.
   - Sites that block iframe embedding show a clear external-tab panel instead of a blank frame.
+  - `docs/browser-app.md` documents Browser app modes, custom bookmarks, and iframe security limits.
 * **Verification**:
   - `npm run build` completed successfully and emitted `dist/browser.html`.
   - `task.jsonl` parsed successfully as JSONL.

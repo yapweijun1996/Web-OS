@@ -36,6 +36,7 @@ For the high-level architecture overview, start with [`../DESIGN.md`](../DESIGN.
 - [Custom Context Menu](custom-context-menu.md) — the desktop-grade right-click context menu.
 - [Control Panel & Settings](control-panel-settings.md) — the Settings panel and API-key / gateway management.
 - [Resource Monitor](resource-monitor.md) — the real-time process-manager app.
+- [Browser App](browser-app.md) — default website suggestions, Embed/Tab modes, custom bookmarks, and iframe security limits.
 
 ## Reviews
 
