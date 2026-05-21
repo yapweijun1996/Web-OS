@@ -262,6 +262,8 @@
 
   <script type="module">
     const MODE_STORAGE_KEY = 'vortex_browser_site_modes';
+    const MODE_SCHEMA_KEY = 'vortex_browser_site_modes_schema';
+    const MODE_SCHEMA_VERSION = '2';
     const CUSTOM_STORAGE_KEY = 'vortex_browser_custom_sites';
     const EXTERNAL_ONLY_HOSTS = new Set([
       'chatgpt.com',
@@ -301,6 +303,7 @@
     let historyIndex = -1;
     let currentUrl = DEFAULT_SITES[0].url;
     let siteModes = loadSiteModes();
+    migrateSiteModes();
     let customSites = loadCustomSites();
     let statusTimer = null;
 
@@ -315,6 +318,17 @@
 
     function saveSiteModes() {
       localStorage.setItem(MODE_STORAGE_KEY, JSON.stringify(siteModes));
+    }
+
+    function migrateSiteModes() {
+      if (localStorage.getItem(MODE_SCHEMA_KEY) === MODE_SCHEMA_VERSION) return;
+      DEFAULT_SITES.forEach((site) => {
+        if (site.externalOnly && site.defaultMode === 'tab' && siteModes[site.id] === 'embed') {
+          delete siteModes[site.id];
+        }
+      });
+      saveSiteModes();
+      localStorage.setItem(MODE_SCHEMA_KEY, MODE_SCHEMA_VERSION);
     }
 
     function loadCustomSites() {
