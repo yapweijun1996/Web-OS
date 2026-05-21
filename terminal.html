@@ -116,7 +116,24 @@
       }
 
       write(value = '') {
-        for (const char of String(value).replace(/\r/g, '')) {
+        const text = String(value);
+        for (let i = 0; i < text.length; i += 1) {
+          if (text.slice(i, i + 5) === '\r\x1b[2K') {
+            const lastLine = this._buffer.lastIndexOf('\n');
+            this._buffer = lastLine === -1 ? '' : this._buffer.slice(0, lastLine + 1);
+            i += 4;
+            continue;
+          }
+          const char = text[i];
+          if (char === '\r') continue;
+          if (char === '\x1b') {
+            const match = text.slice(i).match(/^\x1b\[[0-9;]*[A-Za-z]/);
+            if (match) {
+              i += match[0].length - 1;
+              continue;
+            }
+            continue;
+          }
           if (char === '\b') this._buffer = this._buffer.slice(0, -1);
           else this._buffer += char;
         }
@@ -263,6 +280,9 @@
       let mode = 'shell';
       let cwd = '/';
       let input = '';
+      let cursorIndex = 0;
+      let historyIndex = -1;
+      let historyDraft = '';
       let bridge = null;
       let linuxPort = null;
       let webcontainer = null;
@@ -270,6 +290,7 @@
       let runningProcess = null;
       let processInput = null;
       const runtimeFiles = new Map();
+      const commandHistory = [];
       const prompt = () => `vortex:${cwd} $ `;
 
       term.writeln('Vortex OS Terminal');
@@ -295,6 +316,94 @@
 
       function writePrompt() {
         term.write(prompt());
+      }
+
+      function setInput(next) {
+        input = next;
+        cursorIndex = input.length;
+      }
+
+      function redrawInputLine() {
+        term.write(`\r\x1b[2K${prompt()}${input}`);
+        const right = input.length - cursorIndex;
+        if (right > 0) term.write(`\x1b[${right}D`);
+      }
+
+      function insertInput(text) {
+        input = `${input.slice(0, cursorIndex)}${text}${input.slice(cursorIndex)}`;
+        cursorIndex += text.length;
+        redrawInputLine();
+      }
+
+      function deleteBeforeCursor() {
+        if (cursorIndex <= 0) return;
+        input = `${input.slice(0, cursorIndex - 1)}${input.slice(cursorIndex)}`;
+        cursorIndex -= 1;
+        redrawInputLine();
+      }
+
+      function deleteAtCursor() {
+        if (cursorIndex >= input.length) return;
+        input = `${input.slice(0, cursorIndex)}${input.slice(cursorIndex + 1)}`;
+        redrawInputLine();
+      }
+
+      function moveCursor(delta) {
+        const next = Math.max(0, Math.min(input.length, cursorIndex + delta));
+        const diff = next - cursorIndex;
+        cursorIndex = next;
+        if (diff < 0) term.write(`\x1b[${Math.abs(diff)}D`);
+        if (diff > 0) term.write(`\x1b[${diff}C`);
+      }
+
+      function setCursor(next) {
+        moveCursor(next - cursorIndex);
+      }
+
+      function pushHistory(line) {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        if (commandHistory[commandHistory.length - 1] !== trimmed) {
+          commandHistory.push(trimmed);
+          if (commandHistory.length > 100) commandHistory.shift();
+        }
+        historyIndex = -1;
+        historyDraft = '';
+      }
+
+      function recallHistory(delta) {
+        if (!commandHistory.length) return;
+        if (historyIndex === -1) {
+          historyDraft = input;
+          historyIndex = commandHistory.length;
+        }
+        historyIndex = Math.max(0, Math.min(commandHistory.length, historyIndex + delta));
+        setInput(historyIndex === commandHistory.length ? historyDraft : commandHistory[historyIndex]);
+        redrawInputLine();
+      }
+
+      function commandNames() {
+        return [
+          'help', 'clear', 'date', 'pwd', 'cd', 'ls', 'cat', 'append', 'write',
+          'echo', 'whoami', 'uname', 'storage', 'py', 'js', 'node', 'npm', 'npx',
+          'codex', 'python', 'python3', 'pip', 'pip3', 'apt', 'apt-get', 'linux',
+          'vm', 'jslinux'
+        ];
+      }
+
+      function completeInput() {
+        const beforeCursor = input.slice(0, cursorIndex);
+        if (/\s/.test(beforeCursor)) return;
+        const matches = commandNames().filter((name) => name.startsWith(beforeCursor));
+        if (matches.length === 1) {
+          insertInput(matches[0].slice(beforeCursor.length) + ' ');
+          return;
+        }
+        if (matches.length > 1) {
+          term.write('\r\n');
+          term.writeln(matches.join('  '));
+          redrawInputLine();
+        }
       }
 
       function parseArgs(line) {
@@ -1021,34 +1130,71 @@
           const char = data[i];
           if (char === '\u001b') {
             const sequence = data.slice(i, i + 3);
-            if (/^\u001b\[[ABCD]$/.test(sequence)) {
+            if (sequence === '\u001b[D') {
+              moveCursor(-1);
+              i += 2;
+              continue;
+            }
+            if (sequence === '\u001b[C') {
+              moveCursor(1);
+              i += 2;
+              continue;
+            }
+            if (sequence === '\u001b[A') {
+              recallHistory(-1);
+              i += 2;
+              continue;
+            }
+            if (sequence === '\u001b[B') {
+              recallHistory(1);
+              i += 2;
+              continue;
+            }
+            if (data.slice(i, i + 4) === '\u001b[3~') {
+              deleteAtCursor();
+              i += 3;
+              continue;
+            }
+            if (data.slice(i, i + 3) === '\u001b[H' || data.slice(i, i + 3) === '\u001bOH') {
+              setCursor(0);
+              i += 2;
+              continue;
+            }
+            if (data.slice(i, i + 3) === '\u001b[F' || data.slice(i, i + 3) === '\u001bOF') {
+              setCursor(input.length);
               i += 2;
               continue;
             }
             continue;
           }
           if (char === '\r') {
+            setCursor(input.length);
             term.write('\r\n');
             const line = input;
-            input = '';
+            setInput('');
+            pushHistory(line);
             try {
               await runCommand(line.trim());
             } catch (err) {
               term.writeln(`Error: ${err.message}`);
             }
             if (mode === 'shell') writePrompt();
+          } else if (char === '\t') {
+            completeInput();
           } else if (char === '\u007f') {
-            if (input.length > 0) {
-              input = input.slice(0, -1);
-              term.write('\b \b');
-            }
+            deleteBeforeCursor();
           } else if (char === '\u0003') {
-            input = '';
+            setInput('');
             term.write('^C\r\n');
             writePrompt();
+          } else if (char === '\u0001') {
+            setCursor(0);
+          } else if (char === '\u0005') {
+            setCursor(input.length);
+          } else if (char === '\u0004') {
+            deleteAtCursor();
           } else if (char >= ' ' && char !== '\u007f') {
-            input += char;
-            term.write(char);
+            insertInput(char);
           }
         }
       }
@@ -1078,6 +1224,8 @@
         send: (data) => {
           if (mode === 'linux' && linuxPort) {
             linuxPort.postMessage({ action: 'STDIN', data });
+          } else {
+            handleShellData(data);
           }
         },
         getInstalledGlobalBin,

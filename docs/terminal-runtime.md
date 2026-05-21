@@ -49,6 +49,20 @@ REPL-style JavaScript is detected before the unknown-command path. In HTTP mode 
 
 Arrow-key escape sequences such as left arrow (`ESC [ D`) are filtered in shell mode so they do not become literal `[D` text in the command buffer.
 
+## Shell Line Editing
+
+The shell input layer implements a small terminal-style line editor before dispatching commands:
+
+- Left / Right moves the cursor inside the current line.
+- Backspace deletes before the cursor.
+- Delete deletes at the cursor.
+- Up / Down recalls command history.
+- Home / End and Ctrl+A / Ctrl+E jump to the start or end of the line.
+- Tab completes command names when there is a single match and lists matches when ambiguous.
+- Ctrl+C clears the current input and prints a fresh prompt.
+
+This editor runs only in Vortex shell mode. When a WebContainer process or v86 Linux VM owns the terminal, key data is forwarded to that runtime.
+
 ## npm Global Installs
 
 WebContainer does not allow writes to `/usr/local/lib/node_modules`, so commands such as:
@@ -273,3 +287,4 @@ Verified on 2026-05-21:
 - Chrome DevTools MCP confirmed direct `file://` Terminal mode no longer renders blank, has no console errors, runs `js console.log(22)` through browser JavaScript, and prints a clear HTTP-serving requirement for `npm`.
 - Chrome DevTools MCP confirmed HTTP preview Terminal still runs Pyodide Python and WebContainer Node.js after the fallback change.
 - Chrome DevTools MCP confirmed HTTP preview Terminal runs direct REPL-style `console.log("test");` and `Math.max(3, 9);`, filters left-arrow escape input without leaking `[D`, and reports unknown commands as shell-level `command not found` without WebContainer `jsh` noise.
+- Chrome DevTools MCP confirmed shell line editing supports cursor movement, Delete, command history recall, command-name Tab completion, Ctrl+A/Ctrl+E, and no arrow escape leakage.

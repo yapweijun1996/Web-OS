@@ -407,6 +407,30 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
 
 ---
 
+### 🎫 Issue Key: VORTEX-134
+* **Summary**: Add Normal Terminal Line Editing
+* **Issue Type**: Story
+* **Priority**: High
+* **Status**: Done
+* **Epic**: Terminal Runtime
+* **Description**: The Vortex shell previously behaved like an append-only prompt. It filtered arrow-key escape sequences, but it did not support normal terminal editing patterns such as cursor movement, editing in the middle of the line, command history, Home/End, or Tab completion.
+* **Acceptance Criteria**:
+  - Left and Right move the cursor within the current shell input.
+  - Backspace deletes before the cursor and Delete deletes at the cursor.
+  - Up and Down recall command history without leaking escape text.
+  - Home/End and Ctrl+A/Ctrl+E move to line start/end.
+  - Tab completes command names for single matches and lists ambiguous matches.
+  - Direct-file fallback does not render ANSI redraw control sequences as visible text.
+* **Verification**:
+  - `npm run build` completed successfully.
+  - `task.jsonl` parsed successfully as JSONL.
+  - Chrome DevTools MCP verified cursor movement plus Delete produces the edited command result.
+  - Chrome DevTools MCP verified Up recalls the previous command and runs it again.
+  - Chrome DevTools MCP verified Tab completion completes `ech` to `echo`.
+  - Chrome DevTools MCP verified Ctrl+A/Ctrl+E line positioning and no `[D` arrow escape leakage.
+
+---
+
 ## 🗂️ Epic: macOS Tahoe 26 Design Alignment
 
 Align the Vortex OS desktop with the latest macOS look and feel — **macOS Tahoe 26**
