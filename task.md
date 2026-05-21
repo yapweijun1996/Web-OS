@@ -385,6 +385,28 @@ This document maps out the system backlog for Vortex OS in JIRA ticket format, s
 
 ---
 
+### 🎫 Issue Key: VORTEX-133
+* **Summary**: Support Terminal JavaScript REPL Input And Arrow Keys
+* **Issue Type**: Bug
+* **Priority**: High
+* **Status**: Done
+* **Epic**: Terminal Runtime
+* **Description**: Terminal users reasonably typed `console.log("test");` directly, but the shell treated it as an unknown command. Pressing arrow keys also leaked escape sequences such as `[D` into the command buffer. The Terminal now detects JavaScript-looking lines before unknown-command handling and filters arrow-key escape sequences in shell mode.
+* **Acceptance Criteria**:
+  - Direct `console.log("test");` runs as JavaScript and prints `test`.
+  - Direct JavaScript expressions such as `Math.max(3, 9);` print their result.
+  - Left/right/up/down arrow escape sequences do not appear as literal text in the command buffer.
+  - Unknown commands still print clean shell-level `command not found` messages.
+  - Missing npm global binaries do not fall through to WebContainer `jsh` path errors.
+* **Verification**:
+  - `npm run build` completed successfully.
+  - Chrome DevTools MCP verified `console.log("test");` prints `test`.
+  - Chrome DevTools MCP verified `Math.max(3, 9);` prints `9`.
+  - Chrome DevTools MCP verified pressing left arrow while typing does not leak `[D`.
+  - Chrome DevTools MCP verified `hiD` reports `hiD: command not found` without `jsh` noise.
+
+---
+
 ## 🗂️ Epic: macOS Tahoe 26 Design Alignment
 
 Align the Vortex OS desktop with the latest macOS look and feel — **macOS Tahoe 26**

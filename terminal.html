@@ -276,6 +276,7 @@
       term.writeln('Quick start:');
       term.writeln('  py print("hello")          # run Python inline');
       term.writeln('  js console.log("hello")    # run Node.js inline');
+      term.writeln('  console.log("hello")       # JS REPL-style input');
       term.writeln('  write hi.py "print(42)"    # save file, then: python hi.py');
       term.writeln('  write hi.js "console.log(42)"   # save file, then: node hi.js');
       term.writeln('Type "help" for all commands.');
@@ -409,16 +410,10 @@
 
       async function runGlobalWebContainerCommand(command, args) {
         if (!webcontainer || !isSafeExecutableName(command)) return false;
-        const candidates = [`${NPM_GLOBAL_PREFIX}/bin/${command}`, command];
-        for (const candidate of candidates) {
-          try {
-            await runWebContainerCommand(candidate, args);
-            return true;
-          } catch {
-            // Try the next candidate before falling back to shell-level not found.
-          }
-        }
-        return false;
+        const globalBin = await getInstalledGlobalBin(command);
+        if (!globalBin) return false;
+        await runWebContainerCommand(globalBin, args);
+        return true;
       }
 
       async function readGlobalPackageJson(packageName) {
@@ -565,6 +560,46 @@
         await runBrowserJavaScript(args);
       }
 
+      function replEvalCode(line) {
+        const encoded = btoa(unescape(encodeURIComponent(line)));
+        return `;(async () => {
+  const source = Buffer.from('${encoded}', 'base64').toString('utf8');
+  let value = eval(source);
+  if (value && typeof value.then === 'function') value = await value;
+  if (value !== undefined) console.log(value);
+})().catch((err) => {
+  console.error(err && err.stack ? err.stack : err);
+  process.exitCode = 1;
+});`;
+      }
+
+      async function runJavaScriptReplLine(line) {
+        if (WebContainerRuntime && window.crossOriginIsolated) {
+          await runWebContainerCommand('node', ['-e', replEvalCode(line)]);
+          return;
+        }
+        const browserConsole = {
+          log: (...values) => term.writeln(values.map(String).join(' ')),
+          error: (...values) => term.writeln(values.map(String).join(' ')),
+          warn: (...values) => term.writeln(values.map(String).join(' '))
+        };
+        let value = await Function('console', `"use strict"; return (async () => {
+          let value = eval(${JSON.stringify(line)});
+          if (value && typeof value.then === 'function') value = await value;
+          return value;
+        })();`)(browserConsole);
+        if (value !== undefined) term.writeln(String(value));
+      }
+
+      function looksLikeJavaScript(line) {
+        const trimmed = line.trim();
+        if (!trimmed) return false;
+        if (/^(console|Math|Date|JSON|Number|String|Array|Object|Promise)\./.test(trimmed)) return true;
+        if (/^(const|let|var|await|return|if|for|while|class|function)\b/.test(trimmed)) return true;
+        if (/[;{}]|=>/.test(trimmed)) return true;
+        return false;
+      }
+
       async function runPythonCommand(args) {
         const py = await getPyodide();
         if (!args.length || args[0] === '-V' || args[0] === '--version') {
@@ -667,6 +702,7 @@
             term.writeln('── Inline run (no file needed) ──────────────────────────');
             term.writeln('  py <code>          python -c shorthand  e.g. py print(42)');
             term.writeln('  js <code>          node -e shorthand    e.g. js console.log(42)');
+            term.writeln('  <js statement>     JS REPL-style input  e.g. console.log("test");');
             term.writeln('── File workflow ────────────────────────────────────────');
             term.writeln('  write <file> "<content>"   save to VFS (use \\n for newlines)');
             term.writeln('  python hello.py | node app.js | cat hello.py | ls');
@@ -862,6 +898,10 @@
 
           default:
             {
+              if (looksLikeJavaScript(line)) {
+                await runJavaScriptReplLine(line);
+                break;
+              }
               const ranGlobalCommand = await runGlobalWebContainerCommand(command, args);
               if (!ranGlobalCommand) {
                 term.writeln(`${command}: command not found`);
@@ -977,7 +1017,16 @@
       }
 
       async function handleShellData(data) {
-        for (const char of data) {
+        for (let i = 0; i < data.length; i += 1) {
+          const char = data[i];
+          if (char === '\u001b') {
+            const sequence = data.slice(i, i + 3);
+            if (/^\u001b\[[ABCD]$/.test(sequence)) {
+              i += 2;
+              continue;
+            }
+            continue;
+          }
           if (char === '\r') {
             term.write('\r\n');
             const line = input;
